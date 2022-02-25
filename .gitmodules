@@ -1,0 +1,3 @@
+[submodule "includes/tnl"]
+	path = includes/tnl
+	url = https://mmg-gitlab.fjfi.cvut.cz/gitlab/tnl/tnl-dev.git
