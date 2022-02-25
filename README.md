@@ -1,1 +1,1 @@
-TNL is includes as a submodule in `includes/tnl`.
+TNL is included as a submodule in `includes/tnl`.
