@@ -12,15 +12,14 @@
 #include <TNL/Pointers/SharedPointer.h>
 #include <TNL/Solvers/Linear/GMRES.h> // Doesn't work with nvcc
 
-template <typename Real, typename Device>
+template <typename Real, typename Device, typename Index = int>
 class mhfe {
 	public:
-	using Index	= int;
-	using Matrix	= TNL::Matrices::DenseMatrix<Real, Device>;
+	using Matrix	= TNL::Matrices::DenseMatrix<Real, Device, Index>;
 	using Matrix_p	= std::shared_ptr<Matrix>;
 	using Solver	= TNL::Solvers::Linear::GMRES<Matrix>;
 	using v2d	= TNL::Containers::StaticVector<2, Real>;
-	using Vector	= TNL::Containers::Vector<Real, Device>;
+	using Vector	= TNL::Containers::Vector<Real, Device, Index>;
 
 	// Variables for solution
 	Vector P;	// Solution - average vaules over elements
