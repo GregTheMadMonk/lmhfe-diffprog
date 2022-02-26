@@ -1,5 +1,7 @@
 #pragma once
 
+#include <iostream>	// Here for debugging
+
 #include <filesystem>
 #include <fstream>
 #include <memory>	// std::shared_ptr
@@ -275,7 +277,7 @@ class mhfe {
 		// Right-hand side of domain (x = X): P = 0 -> TP = 0
 		auto reset_x_0 = [=] __cuda_callable__ (int col, int iy) mutable {
 			// Only 'upper' triangles have the needed side
-			const auto edge = edge_index(X, iy, 1, EDGE_J, Nx, Ny);
+			const auto edge = edge_index(Nx - 1, iy, 1, EDGE_J, Nx, Ny);
 			right_view[edge] = 0;
 			m_view.setElement(edge, col, col == edge); // 1 * TP = 0
 		};

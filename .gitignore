@@ -1,4 +1,6 @@
 saved
-mhfe_host
-mhfe_omp
-mhfe_cuda
+*_host
+*_omp
+*_cuda
+*.dat
+test.*
