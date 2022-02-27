@@ -250,11 +250,7 @@ class mhfe {
 					if (((ix == 0) || (ix == Nx - 1)) && (type == EDGE_J))
 						cv[edge] = 1;
 					else
-						cv[edge] = 2;
-					break;
-				case 0:
-					// Impossible
-					cv[edge] = 0;
+						cv[edge] = 3;
 					break;
 			}
 		};
@@ -282,9 +278,18 @@ class mhfe {
 		auto fill_m = [=] __cuda_callable__ (int edge) mutable {
 			Index e1, e2;
 			Edge type;
-			if (get_neighbour_elements(edge, e1, e2, type, Nx, Ny) < 2) return;
-			fill_m_part(edge, e1, type);
-			fill_m_part(edge, e2, type);
+			switch (get_neighbour_elements(edge, e1, e2, type, Nx, Ny)) {
+				case 2:
+					fill_m_part(edge, e1, type);
+					fill_m_part(edge, e2, type);
+					break;
+				case 1:
+					Index ix, iy, u;
+					get_element_params(e1, ix, iy, u, Nx, Ny);
+					if (((iy == 0) || (iy == Ny - 1)) && (type == EDGE_K))
+						fill_m_part(edge, e1, type);
+					break;
+			}
 		};
 		TNL::Algorithms::ParallelFor<Device>::exec(0, edges, fill_m);
 
@@ -294,9 +299,14 @@ class mhfe {
 		auto fill_right = [=] __cuda_callable__ (int edge) mutable {
 			Index e1, e2;
 			Edge type;
-			if (get_neighbour_elements(edge, e1, e2, type, Nx, Ny) < 2) return;
-
-			right_view[edge] = (P_prev_view[e1] + P_prev_view[e2]) * a * lambda / beta / l;
+			switch (get_neighbour_elements(edge, e1, e2, type, Nx, Ny)) {
+				case 2:
+					right_view[edge] = (P_prev_view[e1] + P_prev_view[e2]) * a * lambda / beta / l;
+					break;
+				case 1:
+					right_view[edge] = P_prev_view[e1] * a * lambda / beta / l;
+					break;
+			}
 		};
 		TNL::Algorithms::ParallelFor<Device>::exec(0, edges, fill_right);
 
@@ -317,28 +327,6 @@ class mhfe {
 			if (col == edge) m_view.setElement(edge, col, 1); // 1 * TP = 1
 		};
 		TNL::Algorithms::ParallelFor2D<Device>::exec(0, 0, edges, Ny, reset_x_X);
-
-		// On horizontal sides (y = 0, y = Y):
-		// (q, n) = 0 = ((\nabla, P), n)
-		// n = (0, +/-1) (+ for y=Y, - for y=0)
-		// (\nabla,P) = (dP/dx, dP/dy)
-		// (q, n) = +/-dP/dy
-		// TODO: Replace this dumb stuff with a better approximation
-		// Let's approximate (q, n) = +/-(dTP_between_horizontal_edges_of_lower_and_upper_elements)/dy
-		auto reset_y = [=] __cuda_callable__ (int col, int ix) mutable {
-			const auto edge_top	= edge_index(ix, Ny - 1, 0, EDGE_K, Nx, Ny);
-			const auto edge_posttop	= edge_index(ix, Ny - 1, 1, EDGE_K, Nx, Ny);
-			const auto edge_bot	= edge_index(ix, 0, 1, EDGE_K, Nx, Ny);
-			const auto edge_prebot	= edge_index(ix, 0, 0, EDGE_K, Nx, Ny);
-
-			right_view[edge_bot] = -0;
-			right_view[edge_top] = 0;
-			if (col == edge_top) 	m_view.setElement(edge_top, col, 1.0 / dy);
-			if (col == edge_posttop)m_view.setElement(edge_top, col, -1.0 / dy);
-			if (col == edge_bot)	m_view.setElement(edge_bot, col, 1.0 / dy);
-			if (col == edge_prebot)	m_view.setElement(edge_bot, col, -1.0 / dy);
-		};
-		TNL::Algorithms::ParallelFor2D<Device>::exec(0, 0, edges, Nx, reset_y);
 
 		// Now m should be ready, solve the system
 		auto step_solver = TNL::Solvers::getLinearSolver<Matrix>("gmres");
