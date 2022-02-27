@@ -363,6 +363,13 @@ class mhfe {
 		const Real dx = X / Nx;
 		const Real dy = Y / Ny;
 
+#ifdef HAVE_CUDA
+		// Copy solution to host
+		const auto elems = get_elems(Nx, Ny);
+		TNL::Containers::Vector<Real, TNL::Devices::Host, Index> P(elems);
+		P = this->P;
+#endif
+
 		auto get_x = [&] (const Index& element) {
 			Index ix, iy, u;
 			get_element_params(element, ix, iy, u, Nx, Ny);
@@ -391,6 +398,13 @@ class mhfe {
 
 		const Real dx = X / Nx;
 		const Real dy = Y / Ny;
+
+#ifdef HAVE_CUDA
+		// Copy solution to host
+		const auto edges = get_edges(Nx, Ny);
+		TNL::Containers::Vector<Real, TNL::Devices::Host, Index> TP(edges);
+		TP = this->TP;
+#endif
 
 		for (Index edge = 0; edge < get_edges(Nx, Ny); ++edge) {
 			auto p = edge_midpoint(edge, dx, dy, Nx, Ny);
