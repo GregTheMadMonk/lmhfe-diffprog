@@ -12,14 +12,13 @@
 #include <TNL/Containers/Vector.h>
 #include <TNL/Matrices/SparseMatrix.h>
 #include <TNL/Pointers/SharedPointer.h>
-#include <TNL/Solvers/Linear/GMRES.h> // Doesn't work with nvcc
+#include <TNL/Solvers/LinearSolverTypeResolver.h>
 
 template <typename Real, typename Device, typename Index = int>
 class mhfe {
 	public:
 	using Matrix	= TNL::Matrices::SparseMatrix<Real, Device, Index>;
 	using Matrix_p	= std::shared_ptr<Matrix>;
-	using Solver	= TNL::Solvers::Linear::GMRES<Matrix>;
 	using v2d	= TNL::Containers::StaticVector<2, Real>;
 	using Vector	= TNL::Containers::Vector<Real, Device, Index>;
 	using IVector	= TNL::Containers::Vector<Index, Device, Index>;
@@ -342,9 +341,12 @@ class mhfe {
 		TNL::Algorithms::ParallelFor2D<Device>::exec(0, 0, edges, Nx, reset_y);
 
 		// Now m should be ready, solve the system
-		Solver step_solver;
-		step_solver.setMatrix(m);
-		step_solver.solve(right, TP);
+		auto step_solver = TNL::Solvers::getLinearSolver<Matrix>("gmres");
+		auto step_precond = TNL::Solvers::getPreconditioner<Matrix>("diagonal");
+		step_precond->update(m);
+		step_solver->setMatrix(m);
+		step_solver->setPreconditioner(step_precond);
+		step_solver->solve(right, TP);
 
 		// Finally, get P
 		auto P_view = P.getView();
