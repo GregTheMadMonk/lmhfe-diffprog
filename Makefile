@@ -16,4 +16,4 @@ all: $(TARGETS)
 	nvcc $(INCLUDE) -o $@ $< $(FLAGS) $(CUDA_FLAGS)
 
 clean:
-	-rm $(TARGETS)
+	-rm *_host *_omp *_cuda

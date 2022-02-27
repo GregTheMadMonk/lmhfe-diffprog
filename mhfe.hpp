@@ -10,18 +10,19 @@
 #include <TNL/Algorithms/ParallelFor.h>
 #include <TNL/Containers/StaticVector.h>
 #include <TNL/Containers/Vector.h>
-#include <TNL/Matrices/DenseMatrix.h>
+#include <TNL/Matrices/SparseMatrix.h>
 #include <TNL/Pointers/SharedPointer.h>
 #include <TNL/Solvers/Linear/GMRES.h> // Doesn't work with nvcc
 
 template <typename Real, typename Device, typename Index = int>
 class mhfe {
 	public:
-	using Matrix	= TNL::Matrices::DenseMatrix<Real, Device, Index>;
+	using Matrix	= TNL::Matrices::SparseMatrix<Real, Device, Index>;
 	using Matrix_p	= std::shared_ptr<Matrix>;
 	using Solver	= TNL::Solvers::Linear::GMRES<Matrix>;
 	using v2d	= TNL::Containers::StaticVector<2, Real>;
 	using Vector	= TNL::Containers::Vector<Real, Device, Index>;
+	using IVector	= TNL::Containers::Vector<Index, Device, Index>;
 
 	// Variables for solution
 	Vector P;	// Solution - average vaules over elements
@@ -235,10 +236,36 @@ class mhfe {
 
 		// Clear containers
 		m->setDimensions(edges, edges); // This resets the values for the matrix
+		IVector caps(edges);
+		auto cv = caps.getView();
+		auto get_capacity = [=] __cuda_callable__ (int edge) mutable {
+			Index e1, e2;
+			Edge type;
+			switch (get_neighbour_elements(edge, e1, e2, type, Nx, Ny)) {
+				case 2:
+					cv[edge] = 5;
+					break;
+				case 1:
+					Index ix, iy, u;
+					get_element_params(e1, ix, iy, u, Nx, Ny);
+					if (((ix == 0) || (ix == Nx - 1)) && (type == EDGE_J))
+						cv[edge] = 1;
+					else
+						cv[edge] = 2;
+					break;
+				case 0:
+					// Impossible
+					cv[edge] = 0;
+					break;
+			}
+		};
+		TNL::Algorithms::ParallelFor<Device>::exec(0, edges, get_capacity);
+		m->setRowCapacities(caps);
 		right = Vector(edges, 0);
 		P = Vector(elems, 0);
 
 		auto m_view = m->getView();
+
 		auto fill_m_part = [=] __cuda_callable__ (int edge, int element, const Edge& type) mutable {
 			Index ix, iy, u;
 			get_element_params(element, ix, iy, u, Nx, Ny);
@@ -279,7 +306,7 @@ class mhfe {
 			// Only 'upper' triangles have the needed side
 			const auto edge = edge_index(Nx - 1, iy, 1, EDGE_J, Nx, Ny);
 			right_view[edge] = 0;
-			m_view.setElement(edge, col, col == edge); // 1 * TP = 0
+			if (col == edge) m_view.setElement(edge, col, 1); // 1 * TP = 0
 		};
 		TNL::Algorithms::ParallelFor2D<Device>::exec(0, 0, edges, Ny, reset_x_0);
 
@@ -288,7 +315,7 @@ class mhfe {
 			// Only 'lower' triangles have the needed side
 			const auto edge = edge_index(0, iy, 0, EDGE_J, Nx, Ny);
 			right_view[edge] = 1;
-			m_view.setElement(edge, col, col == edge); // 1 * TP = 1
+			if (col == edge) m_view.setElement(edge, col, 1); // 1 * TP = 1
 		};
 		TNL::Algorithms::ParallelFor2D<Device>::exec(0, 0, edges, Ny, reset_x_X);
 
@@ -307,10 +334,10 @@ class mhfe {
 
 			right_view[edge_bot] = -0;
 			right_view[edge_top] = 0;
-			m_view.setElement(edge_top, col, (col == edge_top) * 1.0 / dy);
-			m_view.addElement(edge_top, col, (col == edge_posttop) * -1.0 / dy);
-			m_view.setElement(edge_bot, col, (col == edge_bot) * 1.0 / dy);
-			m_view.addElement(edge_bot, col, (col == edge_prebot) * -1.0 / dy);
+			if (col == edge_top) 	m_view.setElement(edge_top, col, 1.0 / dy);
+			if (col == edge_posttop)m_view.setElement(edge_top, col, -1.0 / dy);
+			if (col == edge_bot)	m_view.setElement(edge_bot, col, 1.0 / dy);
+			if (col == edge_prebot)	m_view.setElement(edge_bot, col, -1.0 / dy);
 		};
 		TNL::Algorithms::ParallelFor2D<Device>::exec(0, 0, edges, Nx, reset_y);
 
