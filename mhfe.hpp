@@ -228,6 +228,8 @@ class mhfe {
 
 		const auto a = this->a;
 		const auto c = this->c;
+
+		const auto tau = this->tau;
 #endif
 
 		// Back up the solution
