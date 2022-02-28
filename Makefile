@@ -4,7 +4,7 @@ HOST_FLAGS=-fopenmp
 CUDA_FLAGS=-x cu --expt-relaxed-constexpr --expt-extended-lambda -DHAVE_CUDA -Xcudafe --diag_suppress=esa_on_defaulted_function_ignored
 
 # GMRES doesn't compile with nvcc
-TARGETS=mhfe_host mhfe_omp#  mhfe_cuda
+TARGETS=mhfe_host mhfe_omp mhfe_cuda
 
 all: $(TARGETS)
 

@@ -323,7 +323,7 @@ class mhfe {
 		TNL::Algorithms::ParallelFor2D<Device>::exec(0, 0, edges, Ny, reset_x_X);
 
 		// Now m should be ready, solve the system
-		auto step_solver = TNL::Solvers::getLinearSolver<Matrix>("gmres");
+		auto step_solver = TNL::Solvers::getLinearSolver<Matrix>("sor");
 		auto step_precond = TNL::Solvers::getPreconditioner<Matrix>("diagonal");
 		step_precond->update(m);
 		step_solver->setMatrix(m);
