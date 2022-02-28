@@ -270,9 +270,9 @@ class mhfe {
 			for (int eei = 0; eei < 3; ++eei) {
 				const auto ree = edge_vector((Edge)eei, u, dx, dy);
 				const Real B_inv = (r, ree) / element_area + 1.0 / l / 3;
-				const Real delta = a * (B_inv - a / beta / l / l);
+				const Real delta = a * (B_inv - 1.0 / l / 3);
 				const auto eei_index = edge_index(ix, iy, u, (Edge)eei, Nx, Ny);
-				m_view.addElement(edge, eei_index, delta);
+				m_view.addElement(edge, eei_index, delta + (eei_index == edge) * c * element_area / 3.0 / tau);
 			}
 		};
 		auto fill_m = [=] __cuda_callable__ (int edge) mutable {
@@ -295,18 +295,12 @@ class mhfe {
 
 		// m is ready, construct the right-hand vector
 		auto right_view = right.getView();
-		auto P_prev_view = P_prev.getView();
+		auto TP_view = TP.getView();
 		auto fill_right = [=] __cuda_callable__ (int edge) mutable {
 			Index e1, e2;
 			Edge type;
-			switch (get_neighbour_elements(edge, e1, e2, type, Nx, Ny)) {
-				case 2:
-					right_view[edge] = (P_prev_view[e1] + P_prev_view[e2]) * a * lambda / beta / l;
-					break;
-				case 1:
-					right_view[edge] = P_prev_view[e1] * a * lambda / beta / l;
-					break;
-			}
+			const Real count = get_neighbour_elements(edge, e1, e2, type, Nx, Ny);
+			right_view[edge] = c * count * element_area * TP_view[edge] / 3 / tau;
 		};
 		TNL::Algorithms::ParallelFor<Device>::exec(0, edges, fill_right);
 
@@ -338,7 +332,7 @@ class mhfe {
 
 		// Finally, get P
 		auto P_view = P.getView();
-		auto TP_view = TP.getView();
+		auto P_prev_view = P_prev.getView();
 		auto set_P = [=] __cuda_callable__ (int ix, int iy, int u) mutable {
 			const auto element = element_index(ix, iy, u, Nx);
 
