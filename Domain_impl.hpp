@@ -6,7 +6,11 @@
 // TNL headers
 #include <TNL/Algorithms/ParallelFor.h>
 #include <TNL/Meshes/MeshBuilder.h>
+#include <TNL/Meshes/TypeResolver/resolveMeshType.h>
 #include <TNL/Meshes/Writers/VTKWriter.h>
+
+// Local headers
+#include "ConfigTagPermissive.hpp"
 
 using namespace std;
 
@@ -19,6 +23,8 @@ typename Domain DOMAIN_TARGS::RVector& Domain DOMAIN_TARGS::getRealLayer(const L
 		case Edge:
 			return layers.edges.real.at(index);
 	}
+	return *(RVector*)nullptr;	// Is never reached, WILL CRASH if somehow reached
+					// and is only here to remove that annoyting warning
 }
 
 DOMAIN_TEMPLATE
@@ -29,26 +35,42 @@ typename Domain DOMAIN_TARGS::IVector& Domain DOMAIN_TARGS::getIndexLayer(const 
 		case Edge:
 			return layers.edges.index.at(index);
 	}
+	return *(IVector*)nullptr;	// Is never reached, WILL CRASH if somehow reached
+					// and is only here to remove that annoyting warning
 }
 
 DOMAIN_TEMPLATE
 size_t Domain DOMAIN_TARGS::addRealLayer(const Layer& layer) {
 	switch (layer) {
-		case Cell:
-			{
+		case Cell: {
 			const auto cells = mesh.template getEntitiesCount<MeshType::getMeshDimension()>();
 			layers.cells.real.push_back(RVector(cells));
 			return layers.cells.real.size() - 1;
 			}
-		case Edge:
-			{
+		case Edge: {
 			const auto edges = mesh.template getEntitiesCount<MeshType::getMeshDimension() - 1>();
 			layers.edges.real.push_back(RVector(edges));
 			return layers.edges.real.size() - 1;
 			}
-		default:
-			return -1;
 	}
+	return -1;
+}
+
+DOMAIN_TEMPLATE
+size_t Domain DOMAIN_TARGS::addIndexLayer(const Layer& layer) {
+	switch (layer) {
+		case Cell: {
+			const auto cells = mesh.template getEntitiesCount<MeshType::getMeshDimension()>();
+			layers.cells.index.push_back(IVector(cells));
+			return layers.cells.index.size() - 1;
+			}
+		case Edge: {
+			const auto edges = mesh.template getEntitiesCount<MeshType::getMeshDimension() - 1>();
+			layers.edges.index.push_back(IVector(edges));
+			return layers.edges.index.size() - 1;
+			}
+	}
+	return -1;
 }
 
 // Generators
@@ -97,14 +119,11 @@ inline bool Domain DOMAIN_TARGS::generateRectangularDomain(Domain& domain, const
 
 	builder.build(domain.mesh);
 
-	domain.mesh.print(cout);
-	//cout << "Mesh built!" << endl << domain.mesh << endl;
-
 	return true;
 }
 
 DOMAIN_TEMPLATE
-inline bool Domain DOMAIN_TARGS::generateCuboidDomain(Domain& domain) {
+inline bool Domain DOMAIN_TARGS::generateCuboidDomain(Domain& domain, const Index& Nx, const Index& Ny, const Index& Nz, const Real& dx, const Real& dy) {
 	if (!is_same<CellTopology, TNL::Meshes::Topologies::Tetrahedron>()) {
 		cerr << "generateCuboidDomain(...) is only implemented for Tetrahedron (3D) topology!" << endl;
 		return false;
@@ -114,6 +133,26 @@ inline bool Domain DOMAIN_TARGS::generateCuboidDomain(Domain& domain) {
 	return false;
 
 	return true;
+}
+
+DOMAIN_TEMPLATE
+inline bool Domain DOMAIN_TARGS::loadFromMesh(Domain& domain, const std::string& filename) {
+	auto loader = [&] (auto& reader, auto&& mesh) {
+		if (typeid(mesh) != typeid(MeshType)) {
+			cerr << "Read mesh type mismatch ("
+				<< typeid(mesh).name() << " != " << typeid(MeshType).name()
+				<< ")!" << endl;
+			return false;
+		}
+		domain.mesh = *(MeshType*)&mesh; // This is evil and hacky but it gets the work done
+						// And since we check for type mismatch it should
+						// not crash
+		// TODO: find a way to get data layers too
+		return true;
+	};
+
+	using ConfigTag = ConfigTagPermissive<CellTopology>;
+	return TNL::Meshes::resolveAndLoadMesh<ConfigTag, TNL::Devices::Host>(loader, filename, "auto");
 }
 
 DOMAIN_TEMPLATE

@@ -1,6 +1,6 @@
 INCLUDE=-I./includes/tnl/src -I./includes/tnl/src/3rdparty/
-FLAGS=-g -std=c++17 -Winline
-HOST_FLAGS=-fopenmp
+FLAGS=-g -std=c++17 -lstdc++fs
+HOST_FLAGS=-fopenmp -Winline
 CUDA_FLAGS=-x cu --expt-relaxed-constexpr --expt-extended-lambda -DHAVE_CUDA -Xcudafe --diag_suppress=esa_on_defaulted_function_ignored
 
 # GMRES doesn't compile with nvcc
