@@ -3,4 +3,5 @@ saved
 *_omp
 *_cuda
 *.dat
-test.*
+*test*
+*.vtk

@@ -1,5 +1,5 @@
 INCLUDE=-I./includes/tnl/src -I./includes/tnl/src/3rdparty/
-FLAGS=-g -std=c++17
+FLAGS=-g -std=c++17 -Winline
 HOST_FLAGS=-fopenmp
 CUDA_FLAGS=-x cu --expt-relaxed-constexpr --expt-extended-lambda -DHAVE_CUDA -Xcudafe --diag_suppress=esa_on_defaulted_function_ignored
 
