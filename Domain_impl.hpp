@@ -75,7 +75,7 @@ size_t Domain DOMAIN_TARGS::addIndexLayer(const Layer& layer) {
 
 // Generators
 DOMAIN_TEMPLATE
-inline bool Domain DOMAIN_TARGS::generateRectangularDomain(Domain& domain, const Index& Nx, const Index& Ny, const Real& dx, const Real& dy) {
+inline bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, const Index& Ny, const Real& dx, const Real& dy) {
 	if (!is_same<CellTopology, TNL::Meshes::Topologies::Triangle>()) {
 		cerr << "generateRectangularDomain(...) is only implemented for Triangle (2D) topology!" << endl;
 		return false;
@@ -117,13 +117,13 @@ inline bool Domain DOMAIN_TARGS::generateRectangularDomain(Domain& domain, const
 	};
 	TNL::Algorithms::ParallelFor3D<TNL::Devices::Host>::exec(0, 0, 0, Nx, Ny, 2, fill_elems);
 
-	builder.build(domain.mesh);
+	builder.build(mesh);
 
 	return true;
 }
 
 DOMAIN_TEMPLATE
-inline bool Domain DOMAIN_TARGS::generateCuboidDomain(Domain& domain, const Index& Nx, const Index& Ny, const Index& Nz, const Real& dx, const Real& dy) {
+inline bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Index& Ny, const Index& Nz, const Real& dx, const Real& dy) {
 	if (!is_same<CellTopology, TNL::Meshes::Topologies::Tetrahedron>()) {
 		cerr << "generateCuboidDomain(...) is only implemented for Tetrahedron (3D) topology!" << endl;
 		return false;
@@ -136,15 +136,15 @@ inline bool Domain DOMAIN_TARGS::generateCuboidDomain(Domain& domain, const Inde
 }
 
 DOMAIN_TEMPLATE
-inline bool Domain DOMAIN_TARGS::loadFromMesh(Domain& domain, const std::string& filename) {
-	auto loader = [&] (auto& reader, auto&& mesh) {
-		if (typeid(mesh) != typeid(MeshType)) {
+inline bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
+	auto loader = [&] (auto& reader, auto&& loadedMesh) {
+		if (typeid(loadedMesh) != typeid(MeshType)) {
 			cerr << "Read mesh type mismatch ("
-				<< typeid(mesh).name() << " != " << typeid(MeshType).name()
+				<< typeid(loadedMesh).name() << " != " << typeid(MeshType).name()
 				<< ")!" << endl;
 			return false;
 		}
-		domain.mesh = *(MeshType*)&mesh; // This is evil and hacky but it gets the work done
+		mesh = *(MeshType*)&loadedMesh;	// This is evil and hacky but it gets the work done
 						// And since we check for type mismatch it should
 						// not crash
 		// TODO: find a way to get data layers too

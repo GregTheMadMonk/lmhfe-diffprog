@@ -50,12 +50,10 @@ class Domain {
 	std::size_t addRealLayer(const Layer& layer);
 	std::size_t addIndexLayer(const Layer& layer);
 
-	// Some generator functions, they need access to 'mesh' member -> declare as 'friends'
-	// These could've been declared as static 
-	// Dummy functions, each implemented only for certain cell topologies
-	static bool generateRectangularDomain(Domain& domain, const Index& Nx, const Index& Ny, const Real& dx, const Real& dy);
-	static bool generateCuboidDomain(Domain& domain, const Index& Nx, const Index& Ny, const Index& Nz, const Real& dx, const Real& dy);
-	static bool loadFromMesh(Domain& domain, const std::string& filename);
+	// Some generator functions
+	bool generateRectangularDomain(const Index& Nx, const Index& Ny, const Real& dx, const Real& dy);
+	bool generateCuboidDomain(const Index& Nx, const Index& Ny, const Index& Nz, const Real& dx, const Real& dy);
+	bool loadFromMesh(const std::string& filename);
 
 	// Write mesh data to a file
 	bool write(const std::string& filename);
