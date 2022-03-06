@@ -24,7 +24,9 @@ class Domain {
 	// NOTE: resolveAndLoad mesh returns a mesh with 'long int' for GlobalIndex for some reason
 	// instead of default 'int', so we have to account for that here
 	using MeshConfig	= TNL::Meshes::DefaultConfig<CellTopology, CellTopology::dimension, Real, long int>;
-	using MeshType		= TNL::Meshes::Mesh<MeshConfig>; // Meshes are only implemented for Host (?)
+	using MeshType		= TNL::Meshes::Mesh<MeshConfig>;// Meshes are only implemented for Host (?)
+	using Mesh_p		= std::unique_ptr<MeshType>;	// Mesh is only accessible from inside a class,
+						// and isn't passed by-value, so unique_ptr should be sufficient
 
 	// Domain data layers (TNL meshes don't contain any data by themselves)
 	struct {
@@ -35,7 +37,7 @@ class Domain {
 	} layers;
 
 	// Domain mesh
-	MeshType mesh;
+	Mesh_p mesh = nullptr;
 
 	public:
 	enum Layer { Cell, Edge };
@@ -44,25 +46,45 @@ class Domain {
 
 	// Constructors
 	Domain()		= default;
-	Domain(Domain&& domain)	= default;
+	Domain(const Domain& d2)= default;
+	Domain(Domain&& d2)	= default;
+	Domain& operator=(const Domain& d2)	= default;
+	Domain& operator=(Domain&& d2)		= default;
+
+	// Clear mesh data
+	void clear();
 
 	// Mesh iterating
 	// These repeat 'Mesh' mathods (basically call them)
 	// Pretend this is 'readable'
 	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
-	void forAll(Func f)	{ mesh.template forAll<dimension, Device2>(f);		}
+	void forAll(Func f)	{ mesh->template forAll<dimension, Device2>(f);		}
 	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
-	void forBoundary(Func f){ mesh.template forBoundary<dimension, Device2>(f);	}
+	void forBoundary(Func f){ mesh->template forBoundary<dimension, Device2>(f);	}
 	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
-	void forGhost(Func f)	{ mesh.template forGhost<dimension, Device2>(f);	}
+	void forGhost(Func f)	{ mesh->template forGhost<dimension, Device2>(f);	}
 	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
-	void forInterior(Func f){ mesh.template forInterior<dimension, Device2>(f);	}
+	void forInterior(Func f){ mesh->template forInterior<dimension, Device2>(f);	}
 	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
-	void forLocal(Func f)	{ mesh.template forLocal<dimension, Device2>(f);	}
+	void forLocal(Func f)	{ mesh->template forLocal<dimension, Device2>(f);	}
+
+	// Mesh parameter getters
+	template <int dimension = dimensions()>
+	auto getEntitiesCount() const { return mesh->template getEntitiesCount<dimension>(); }
+	template <int eDimension = dimensions(), int sDimension = eDimension - 1>
+	auto getSubentitiesCount(typename MeshType::GlobalIndexType index) const {
+		return mesh->template getSubentitiesCount<eDimension, sDimension>(index);
+	}
 
 	// Layer management
 	RVector& getRealLayer(const Layer& layer, const std::size_t& index);
+	const RVector& getRealLayer(const Layer& layer, const std::size_t& index) const {
+		return static_cast<Domain*>(this)->getRealLayer(layer, index);
+	}
 	IVector& getIndexLayer(const Layer& layer, const std::size_t& index);
+	const IVector& getIndexLayer(const Layer& layer, const std::size_t& index) const {
+		return static_cast<Domain*>(this)->getIndexLayer(layer, index);
+	}
 	std::size_t addRealLayer(const Layer& layer);
 	std::size_t addIndexLayer(const Layer& layer);
 

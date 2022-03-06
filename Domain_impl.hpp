@@ -14,6 +14,22 @@
 
 using namespace std;
 
+// Mesh clearer
+DOMAIN_TEMPLATE
+void Domain DOMAIN_TARGS::clear() {
+	if (mesh == nullptr) return; // Nothing to clear
+
+	// Reset the mesh
+	mesh.reset();
+	mesh = nullptr;
+
+	// Reset the layers
+	layers.cells.real.clear();
+	layers.cells.index.clear();
+	layers.edges.real.clear();
+	layers.edges.index.clear();
+}
+
 // Layer getters
 DOMAIN_TEMPLATE
 typename Domain DOMAIN_TARGS::RVector& Domain DOMAIN_TARGS::getRealLayer(const Layer& layer, const size_t& index) {
@@ -43,12 +59,12 @@ DOMAIN_TEMPLATE
 size_t Domain DOMAIN_TARGS::addRealLayer(const Layer& layer) {
 	switch (layer) {
 		case Cell: {
-			const auto cells = mesh.template getEntitiesCount<MeshType::getMeshDimension()>();
+			const auto cells = mesh->template getEntitiesCount<MeshType::getMeshDimension()>();
 			layers.cells.real.push_back(RVector(cells));
 			return layers.cells.real.size() - 1;
 			}
 		case Edge: {
-			const auto edges = mesh.template getEntitiesCount<MeshType::getMeshDimension() - 1>();
+			const auto edges = mesh->template getEntitiesCount<MeshType::getMeshDimension() - 1>();
 			layers.edges.real.push_back(RVector(edges));
 			return layers.edges.real.size() - 1;
 			}
@@ -60,12 +76,12 @@ DOMAIN_TEMPLATE
 size_t Domain DOMAIN_TARGS::addIndexLayer(const Layer& layer) {
 	switch (layer) {
 		case Cell: {
-			const auto cells = mesh.template getEntitiesCount<MeshType::getMeshDimension()>();
+			const auto cells = mesh->template getEntitiesCount<MeshType::getMeshDimension()>();
 			layers.cells.index.push_back(IVector(cells));
 			return layers.cells.index.size() - 1;
 			}
 		case Edge: {
-			const auto edges = mesh.template getEntitiesCount<MeshType::getMeshDimension() - 1>();
+			const auto edges = mesh->template getEntitiesCount<MeshType::getMeshDimension() - 1>();
 			layers.edges.index.push_back(IVector(edges));
 			return layers.edges.index.size() - 1;
 			}
@@ -76,10 +92,16 @@ size_t Domain DOMAIN_TARGS::addIndexLayer(const Layer& layer) {
 // Generators
 DOMAIN_TEMPLATE
 inline bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, const Index& Ny, const Real& dx, const Real& dy) {
+	if (mesh != nullptr) {
+		cerr << "Mesh data is not empty, was clear() called?" << endl;
+		return false;
+	}
 	if (!is_same<CellTopology, TNL::Meshes::Topologies::Triangle>()) {
 		cerr << "generateRectangularDomain(...) is only implemented for Triangle (2D) topology!" << endl;
 		return false;
 	}
+
+	mesh = make_unique<MeshType>();
 
 	using Builder = TNL::Meshes::MeshBuilder<MeshType>;
 	Builder builder;
@@ -117,17 +139,23 @@ inline bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, cons
 	};
 	TNL::Algorithms::ParallelFor3D<TNL::Devices::Host>::exec(0, 0, 0, Nx, Ny, 2, fill_elems);
 
-	builder.build(mesh);
+	builder.build(*mesh);
 
 	return true;
 }
 
 DOMAIN_TEMPLATE
 inline bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Index& Ny, const Index& Nz, const Real& dx, const Real& dy) {
+	if (mesh != nullptr) {
+		cerr << "Mesh data is not empty, was clear() called?" << endl;
+		return false;
+	}
 	if (!is_same<CellTopology, TNL::Meshes::Topologies::Tetrahedron>()) {
 		cerr << "generateCuboidDomain(...) is only implemented for Tetrahedron (3D) topology!" << endl;
 		return false;
 	}
+
+	mesh = make_unique<MeshType>();
 
 	cerr << "TODO: implement" << endl; // TODO
 	return false;
@@ -137,6 +165,13 @@ inline bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Ind
 
 DOMAIN_TEMPLATE
 inline bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
+	if (mesh != nullptr) {
+		cerr << "Mesh data is not empty, was clear() called?" << endl;
+		return false;
+	}
+
+	mesh = make_unique<MeshType>();
+
 	auto loader = [&] (auto& reader, auto&& loadedMesh) {
 		if (typeid(loadedMesh) != typeid(MeshType)) {
 			cerr << "Read mesh type mismatch ("
@@ -144,7 +179,7 @@ inline bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
 				<< ")!" << endl;
 			return false;
 		}
-		mesh = *(MeshType*)&loadedMesh;	// This is evil and hacky but it gets the work done
+		*mesh = *(MeshType*)&loadedMesh;// This is evil and hacky but it gets the work done
 						// And since we check for type mismatch it should
 						// not crash
 		// TODO: find a way to get data layers too
@@ -165,10 +200,10 @@ inline bool Domain DOMAIN_TARGS::write(const std::string& filename) {
 
 	using Writer = TNL::Meshes::Writers::VTKWriter<MeshType>;
 	Writer writer(file);
-	writer.template writeEntities<MeshType::getMeshDimension()>(mesh);
+	writer.template writeEntities<MeshType::getMeshDimension()>(*mesh);
 
 	// Write cell index layer
-	IVector layer(mesh.template getEntitiesCount<MeshType::getMeshDimension()>());
+	IVector layer(mesh->template getEntitiesCount<MeshType::getMeshDimension()>());
 	layer.forAllElements([] (int i, Index& v) { v = i; });
 	writer.writeCellData(layer, "cell_index");
 
