@@ -40,9 +40,25 @@ class Domain {
 	public:
 	enum Layer { Cell, Edge };
 
+	static constexpr int dimensions() { return MeshType::getMeshDimension(); }
+
 	// Constructors
 	Domain()		= default;
 	Domain(Domain&& domain)	= default;
+
+	// Mesh iterating
+	// These repeat 'Mesh' mathods (basically call them)
+	// Pretend this is 'readable'
+	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
+	void forAll(Func f)	{ mesh.template forAll<dimension, Device2>(f);		}
+	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
+	void forBoundary(Func f){ mesh.template forBoundary<dimension, Device2>(f);	}
+	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
+	void forGhost(Func f)	{ mesh.template forGhost<dimension, Device2>(f);	}
+	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
+	void forInterior(Func f){ mesh.template forInterior<dimension, Device2>(f);	}
+	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
+	void forLocal(Func f)	{ mesh.template forLocal<dimension, Device2>(f);	}
 
 	// Layer management
 	RVector& getRealLayer(const Layer& layer, const std::size_t& index);
