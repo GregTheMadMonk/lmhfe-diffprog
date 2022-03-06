@@ -26,7 +26,7 @@ class Domain {
 	using MeshConfig	= TNL::Meshes::DefaultConfig<CellTopology, CellTopology::dimension, Real, long int>;
 	using MeshType		= TNL::Meshes::Mesh<MeshConfig>;// Meshes are only implemented for Host (?)
 	using Mesh_p		= std::unique_ptr<MeshType>;	// Mesh is only accessible from inside a class,
-						// and isn't passed by-value, so unique_ptr should be sufficient
+						// and isn't passed by pointer, so unique_ptr should be sufficient
 
 	// Domain data layers (TNL meshes don't contain any data by themselves)
 	struct {
@@ -55,7 +55,7 @@ class Domain {
 	void clear();
 
 	// Mesh iterating
-	// These repeat 'Mesh' mathods (basically call them)
+	// These repeat 'Mesh' methods (basically call them)
 	// Pretend this is 'readable'
 	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
 	void forAll(Func f)	{ mesh->template forAll<dimension, Device2>(f);		}
