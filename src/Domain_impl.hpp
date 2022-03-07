@@ -2,6 +2,7 @@
 
 // STL headers
 #include <iostream>
+#include <fstream>
 
 // TNL headers
 #include <TNL/Algorithms/ParallelFor.h>
@@ -11,8 +12,6 @@
 
 // Local headers
 #include "ConfigTagPermissive.hpp"
-
-using namespace std;
 
 // Mesh clearer
 DOMAIN_TEMPLATE
@@ -93,15 +92,15 @@ size_t Domain DOMAIN_TARGS::addIndexLayer(const Layer& layer) {
 DOMAIN_TEMPLATE
 inline bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, const Index& Ny, const Real& dx, const Real& dy) {
 	if (mesh != nullptr) {
-		cerr << "Mesh data is not empty, was clear() called?" << endl;
+		std::cerr << "Mesh data is not empty, was clear() called?" << std::endl;
 		return false;
 	}
-	if (!is_same<CellTopology, TNL::Meshes::Topologies::Triangle>()) {
-		cerr << "generateRectangularDomain(...) is only implemented for Triangle (2D) topology!" << endl;
+	if (!std::is_same<CellTopology, TNL::Meshes::Topologies::Triangle>()) {
+		std::cerr << "generateRectangularDomain(...) is only implemented for Triangle (2D) topology!" << std::endl;
 		return false;
 	}
 
-	mesh = make_unique<MeshType>();
+	mesh = std::make_unique<MeshType>();
 
 	using Builder = TNL::Meshes::MeshBuilder<MeshType>;
 	Builder builder;
@@ -134,7 +133,7 @@ inline bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, cons
 				seed.setCornerId(2, point_id(ix, iy + 1));
 				break;
 			default:
-				cerr << "Unrealistic 'u' value encountered: " << u << endl;
+				std::cerr << "Unrealistic 'u' value encountered: " << u << std::endl;
 		}
 	};
 	TNL::Algorithms::ParallelFor3D<TNL::Devices::Host>::exec(0, 0, 0, Nx, Ny, 2, fill_elems);
@@ -147,17 +146,17 @@ inline bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, cons
 DOMAIN_TEMPLATE
 inline bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Index& Ny, const Index& Nz, const Real& dx, const Real& dy) {
 	if (mesh != nullptr) {
-		cerr << "Mesh data is not empty, was clear() called?" << endl;
+		std::cerr << "Mesh data is not empty, was clear() called?" << std::endl;
 		return false;
 	}
-	if (!is_same<CellTopology, TNL::Meshes::Topologies::Tetrahedron>()) {
-		cerr << "generateCuboidDomain(...) is only implemented for Tetrahedron (3D) topology!" << endl;
+	if (!std::is_same<CellTopology, TNL::Meshes::Topologies::Tetrahedron>()) {
+		std::cerr << "generateCuboidDomain(...) is only implemented for Tetrahedron (3D) topology!" << std::endl;
 		return false;
 	}
 
-	mesh = make_unique<MeshType>();
+	mesh = std::make_unique<MeshType>();
 
-	cerr << "TODO: implement" << endl; // TODO
+	std::cerr << "TODO: implement" << std::endl; // TODO
 	return false;
 
 	return true;
@@ -166,17 +165,17 @@ inline bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Ind
 DOMAIN_TEMPLATE
 inline bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
 	if (mesh != nullptr) {
-		cerr << "Mesh data is not empty, was clear() called?" << endl;
+		std::cerr << "Mesh data is not empty, was clear() called?" << std::endl;
 		return false;
 	}
 
-	mesh = make_unique<MeshType>();
+	mesh = std::make_unique<MeshType>();
 
 	auto loader = [&] (auto& reader, auto&& loadedMesh) {
 		if (typeid(loadedMesh) != typeid(MeshType)) {
-			cerr << "Read mesh type mismatch ("
+			std::cerr << "Read mesh type mismatch ("
 				<< typeid(loadedMesh).name() << " != " << typeid(MeshType).name()
-				<< ")!" << endl;
+				<< ")!" << std::endl;
 			return false;
 		}
 		*mesh = *(MeshType*)&loadedMesh;// This is evil and hacky but it gets the work done
@@ -192,9 +191,9 @@ inline bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
 
 DOMAIN_TEMPLATE
 inline bool Domain DOMAIN_TARGS::write(const std::string& filename) {
-	ofstream file(filename);
+	std::ofstream file(filename);
 	if (!file.is_open()) {
-		cerr << "Could not open file for writing: " << filename << endl;
+		std::cerr << "Could not open file for writing: " << filename << std::endl;
 		return false;
 	}
 
@@ -209,13 +208,13 @@ inline bool Domain DOMAIN_TARGS::write(const std::string& filename) {
 
 	// Write layers
 	for (int i = 0; i < layers.cells.real.size(); ++i)
-		writer.writeCellData(layers.cells.real.at(i), "cell_real_layer_" + to_string(i));
+		writer.writeCellData(layers.cells.real.at(i), "cell_real_layer_" + std::to_string(i));
 	for (int i = 0; i < layers.cells.index.size(); ++i)
-		writer.writeCellData(layers.cells.index.at(i), "cell_index_layer_" + to_string(i));
+		writer.writeCellData(layers.cells.index.at(i), "cell_index_layer_" + std::to_string(i));
 	for (int i = 0; i < layers.edges.real.size(); ++i)
-		writer.writeCellData(layers.edges.real.at(i), "edge_real_layer_" + to_string(i));
+		writer.writeCellData(layers.edges.real.at(i), "edge_real_layer_" + std::to_string(i));
 	for (int i = 0; i < layers.edges.index.size(); ++i)
-		writer.writeCellData(layers.edges.index.at(i), "edge_index_layer_" + to_string(i));
+		writer.writeCellData(layers.edges.index.at(i), "edge_index_layer_" + std::to_string(i));
 
 	return true;
 }

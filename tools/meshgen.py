@@ -14,7 +14,6 @@ def main():
     parser.add_argument("-dz", type=float, default=0, help="Cell size along Z axis", )
     args = parser.parse_args()
 
-    output = None
     output = vista.UniformGrid(dims=(args.Nx + 1, args.Ny + 1, args.Nz + 1), spacing=(args.dx, args.dy, args.dz))
     if args.T: output = output.triangulate()
 

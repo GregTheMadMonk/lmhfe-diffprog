@@ -1,7 +1,5 @@
 saved
-*_host
-*_omp
-*_cuda
-*.dat
-*test*
+build
 *.vtk
+*.dat
+*.csv
