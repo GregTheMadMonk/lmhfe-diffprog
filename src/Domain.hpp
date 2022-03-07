@@ -17,6 +17,7 @@
 // Domain contains the mesh and data layers for it
 template <typename CellTopology, typename Device = TNL::Devices::Host, typename Real = float, typename Index = int>
 class Domain {
+	// Alias types
 	// Data vectors
 	using RVector		= TNL::Containers::Vector<Real, Device, Index>;
 	using IVector		= TNL::Containers::Vector<Index, Device, Index>;
@@ -53,6 +54,9 @@ class Domain {
 
 	// Clear mesh data
 	void clear();
+	void clearLayers();
+
+	bool isClean() const { return mesh == nullptr; }
 
 	// Mesh iterating
 	// These repeat 'Mesh' methods (basically call them)

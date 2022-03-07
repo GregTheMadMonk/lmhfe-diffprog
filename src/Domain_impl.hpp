@@ -15,13 +15,18 @@
 
 // Mesh clearer
 DOMAIN_TEMPLATE
-void Domain DOMAIN_TARGS::clear() {
-	if (mesh == nullptr) return; // Nothing to clear
+inline void Domain DOMAIN_TARGS::clear() {
+	if (isClean()) return; // Nothing to clear
 
 	// Reset the mesh
 	mesh.reset();
 	mesh = nullptr;
 
+	clearLayers();
+}
+
+DOMAIN_TEMPLATE
+inline void Domain DOMAIN_TARGS::clearLayers() {
 	// Reset the layers
 	layers.cells.real.clear();
 	layers.cells.index.clear();
@@ -31,7 +36,7 @@ void Domain DOMAIN_TARGS::clear() {
 
 // Layer getters
 DOMAIN_TEMPLATE
-typename Domain DOMAIN_TARGS::RVector& Domain DOMAIN_TARGS::getRealLayer(const Layer& layer, const size_t& index) {
+inline typename Domain DOMAIN_TARGS::RVector& Domain DOMAIN_TARGS::getRealLayer(const Layer& layer, const size_t& index) {
 	switch (layer) {
 		case Cell:
 			return layers.cells.real.at(index);
@@ -43,7 +48,7 @@ typename Domain DOMAIN_TARGS::RVector& Domain DOMAIN_TARGS::getRealLayer(const L
 }
 
 DOMAIN_TEMPLATE
-typename Domain DOMAIN_TARGS::IVector& Domain DOMAIN_TARGS::getIndexLayer(const Layer& layer, const size_t& index) {
+inline typename Domain DOMAIN_TARGS::IVector& Domain DOMAIN_TARGS::getIndexLayer(const Layer& layer, const size_t& index) {
 	switch (layer) {
 		case Cell:
 			return layers.cells.index.at(index);
@@ -55,7 +60,7 @@ typename Domain DOMAIN_TARGS::IVector& Domain DOMAIN_TARGS::getIndexLayer(const 
 }
 
 DOMAIN_TEMPLATE
-size_t Domain DOMAIN_TARGS::addRealLayer(const Layer& layer) {
+inline size_t Domain DOMAIN_TARGS::addRealLayer(const Layer& layer) {
 	switch (layer) {
 		case Cell: {
 			const auto cells = mesh->template getEntitiesCount<MeshType::getMeshDimension()>();
@@ -72,7 +77,7 @@ size_t Domain DOMAIN_TARGS::addRealLayer(const Layer& layer) {
 }
 
 DOMAIN_TEMPLATE
-size_t Domain DOMAIN_TARGS::addIndexLayer(const Layer& layer) {
+inline size_t Domain DOMAIN_TARGS::addIndexLayer(const Layer& layer) {
 	switch (layer) {
 		case Cell: {
 			const auto cells = mesh->template getEntitiesCount<MeshType::getMeshDimension()>();
@@ -90,7 +95,7 @@ size_t Domain DOMAIN_TARGS::addIndexLayer(const Layer& layer) {
 
 // Generators
 DOMAIN_TEMPLATE
-inline bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, const Index& Ny, const Real& dx, const Real& dy) {
+bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, const Index& Ny, const Real& dx, const Real& dy) {
 	if (mesh != nullptr) {
 		std::cerr << "Mesh data is not empty, was clear() called?" << std::endl;
 		return false;
@@ -144,7 +149,7 @@ inline bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, cons
 }
 
 DOMAIN_TEMPLATE
-inline bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Index& Ny, const Index& Nz, const Real& dx, const Real& dy) {
+bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Index& Ny, const Index& Nz, const Real& dx, const Real& dy) {
 	if (mesh != nullptr) {
 		std::cerr << "Mesh data is not empty, was clear() called?" << std::endl;
 		return false;
@@ -163,7 +168,7 @@ inline bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Ind
 }
 
 DOMAIN_TEMPLATE
-inline bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
+bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
 	if (mesh != nullptr) {
 		std::cerr << "Mesh data is not empty, was clear() called?" << std::endl;
 		return false;
