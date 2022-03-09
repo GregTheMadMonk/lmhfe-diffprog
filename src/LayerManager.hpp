@@ -13,6 +13,7 @@ class LayerBase {
 	virtual void setSize(const Index& size) = 0;
 	virtual Index getSize() const = 0;
 	virtual void writeCellData(Writer& writer, const std::string& name) = 0;
+	virtual void writeDataArray(Writer& writer, const std::string& name) = 0;
 };
 
 template <typename Data, typename Device, typename Index, typename Writer>
@@ -32,6 +33,9 @@ struct Layer : public LayerBase<Index, Writer> {
 
 	void writeCellData(Writer& writer, const std::string& name) {
 		writer.writeCellData(data, name);
+	}
+	void writeDataArray(Writer& writer, const std::string& name) {
+		writer.writeDataArray(data, name);
 	}
 };
 

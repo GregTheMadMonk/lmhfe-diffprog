@@ -159,12 +159,8 @@ inline bool Domain DOMAIN_TARGS::write(const std::string& filename) {
 	// Write layers
 	for (int i = 0; i < layers.cell.count(); ++i)
 		layers.cell.getBasePtr(i)->writeCellData(writer, "cell_layer_" + std::to_string(i));
-	/*
-	 * This will crash because there's more data than there is cells
-	 * TODO: Find a way to save edge data
 	for (int i = 0; i < layers.edge.count(); ++i)
-		layers.edge.getBasePtr(i)->writeCellData(writer, "edge_layer_" + std::to_string(i));
-	 */
+		layers.edge.getBasePtr(i)->writeDataArray(writer, "edge_layer_" + std::to_string(i));
 
 	return true;
 }
