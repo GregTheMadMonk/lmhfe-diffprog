@@ -22,15 +22,15 @@ struct Layer : public LayerBase<Index, Writer> {
 	Layer(const Index& size) {
 		setSize(size);
 	}
-	inline void setSize(const Index& size) {
+	void setSize(const Index& size) {
 		data.setSize(size);
 	}
-	inline Data& operator[](const Index& index) {
+	Data& operator[](const Index& index) {
 		return data[index];
 	}
-	inline Index getSize() const { return data.getSize(); }
+	Index getSize() const { return data.getSize(); }
 
-	inline void writeCellData(Writer& writer, const std::string& name) {
+	void writeCellData(Writer& writer, const std::string& name) {
 		writer.writeCellData(data, name);
 	}
 };
@@ -41,14 +41,14 @@ class LayerManager {
 	Index size;
 
 	public:
-	inline void setSize(const Index& newSize) {
+	void setSize(const Index& newSize) {
 		size = newSize;
 		for (auto& layer : layers) layer->setSize(size);
 	}
 
-	inline std::size_t count() { return layers.size(); }
+	std::size_t count() { return layers.size(); }
 
-	inline void clear() {
+	void clear() {
 		while (!layers.empty()) {
 			delete layers.at(0);
 			layers.erase(layers.begin());
@@ -56,19 +56,19 @@ class LayerManager {
 	}
 
 	template <typename Data>
-	inline std::size_t add() {
+	std::size_t add() {
 		Layer<Data, Device, Index, Writer>* layer = new Layer<Data, Device, Index, Writer>(size);
 		layers.push_back(layer);
 		return layers.size() - 1;
 	}
 	template <typename Data>
-	inline Layer<Data, Device, Index, Writer>& get(const std::size_t& index) {
+	Layer<Data, Device, Index, Writer>& get(const std::size_t& index) {
 		const auto ptr = dynamic_cast<Layer<Data, Device, Index, Writer>*>(layers.at(index));
 		// dynamic_cast will return nullptr on child template type mismatch
 		if (ptr == nullptr) throw std::runtime_error("Couldn't return layer, probably wrong data type!");
 		return *ptr;
 	}
-	inline LayerBase<Index, Writer>* getBasePtr(const std::size_t& index) {
+	LayerBase<Index, Writer>* getBasePtr(const std::size_t& index) {
 		return layers.at(index);
 	}
 };
