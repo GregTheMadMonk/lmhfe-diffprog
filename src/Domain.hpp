@@ -8,6 +8,10 @@
 #include <TNL/Meshes/DefaultConfig.h>
 #include <TNL/Meshes/Mesh.h>
 #include <TNL/Meshes/TypeResolver/BuildConfigTags.h>
+#include <TNL/Meshes/Writers/VTKWriter.h>
+
+// Local headers
+#include "LayerManager.hpp"
 
 // Me lazy no want write many word
 #define DOMAIN_TEMPLATE	template <typename CellTopology, typename Device, typename Real, typename Index>
@@ -17,10 +21,8 @@
 // Domain contains the mesh and data layers for it
 template <typename CellTopology, typename Device = TNL::Devices::Host, typename Real = float, typename Index = int>
 class Domain {
-	// Alias types
-	// Data vectors
-	using RVector		= TNL::Containers::Vector<Real, Device, Index>;
-	using IVector		= TNL::Containers::Vector<Index, Device, Index>;
+	// Alias types (declare public)
+	public:
 	// Mesh
 	// NOTE: resolveAndLoad mesh returns a mesh with 'long int' for GlobalIndex for some reason
 	// instead of default 'int', so we have to account for that here
@@ -28,20 +30,19 @@ class Domain {
 	using MeshType		= TNL::Meshes::Mesh<MeshConfig>;// Meshes are only implemented for Host (?)
 	using Mesh_p		= std::unique_ptr<MeshType>;	// Mesh is only accessible from inside a class,
 						// and isn't passed by pointer, so unique_ptr should be sufficient
+	using MeshWriter = TNL::Meshes::Writers::VTKWriter<MeshType>;
 
-	// Domain data layers (TNL meshes don't contain any data by themselves)
-	struct {
-		struct {
-			std::vector<RVector> real;
-			std::vector<IVector> index;
-		} cells, edges;
-	} layers;
-
+	protected:
 	// Domain mesh
 	Mesh_p mesh = nullptr;
 
+	void updateLayerSizes();
+
 	public:
-	enum Layer { Cell, Edge };
+	struct {
+		LayerManager<Index, Device, MeshWriter> cell;
+		LayerManager<Index, Device, MeshWriter> edge;
+	} layers;
 
 	static constexpr int dimensions() { return MeshType::getMeshDimension(); }
 
@@ -54,7 +55,6 @@ class Domain {
 
 	// Clear mesh data
 	void clear();
-	void clearLayers();
 
 	bool isClean() const { return mesh == nullptr; }
 
@@ -79,18 +79,6 @@ class Domain {
 	auto getSubentitiesCount(typename MeshType::GlobalIndexType index) const {
 		return mesh->template getSubentitiesCount<eDimension, sDimension>(index);
 	}
-
-	// Layer management
-	RVector& getRealLayer(const Layer& layer, const std::size_t& index);
-	const RVector& getRealLayer(const Layer& layer, const std::size_t& index) const {
-		return static_cast<Domain*>(this)->getRealLayer(layer, index);
-	}
-	IVector& getIndexLayer(const Layer& layer, const std::size_t& index);
-	const IVector& getIndexLayer(const Layer& layer, const std::size_t& index) const {
-		return static_cast<Domain*>(this)->getIndexLayer(layer, index);
-	}
-	std::size_t addRealLayer(const Layer& layer);
-	std::size_t addIndexLayer(const Layer& layer);
 
 	// Some generator functions
 	bool generateRectangularDomain(const Index& Nx, const Index& Ny, const Real& dx, const Real& dy);

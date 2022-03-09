@@ -15,8 +15,8 @@ int main() {
 	domain.write("domain1.vtk");
 	DomainType domain2;
 	domain2.loadFromMesh("domain1.vtk");
-	const auto layer = domain2.addRealLayer(DomainType::Layer::Cell);
-	domain2.getRealLayer(DomainType::Layer::Cell, layer).forAllElements([] (int i, float& v) {
+	const auto layer = domain2.layers.cell.template add<float>();
+	domain2.layers.cell.template get<float>(layer).data.forAllElements([] (int i, float& v) {
 		v = sin(i * 0.1);
 	});
 	domain2.write("domain2.vtk");

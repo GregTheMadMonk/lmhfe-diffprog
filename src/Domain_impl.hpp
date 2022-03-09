@@ -8,10 +8,16 @@
 #include <TNL/Algorithms/ParallelFor.h>
 #include <TNL/Meshes/MeshBuilder.h>
 #include <TNL/Meshes/TypeResolver/resolveMeshType.h>
-#include <TNL/Meshes/Writers/VTKWriter.h>
 
 // Local headers
 #include "ConfigTagPermissive.hpp"
+
+// Update layer sizes
+DOMAIN_TEMPLATE
+inline void Domain DOMAIN_TARGS::updateLayerSizes() {
+	layers.cell.setSize(getEntitiesCount());
+	layers.edge.setSize(getEntitiesCount<dimensions() - 1>());
+}
 
 // Mesh clearer
 DOMAIN_TEMPLATE
@@ -22,75 +28,8 @@ inline void Domain DOMAIN_TARGS::clear() {
 	mesh.reset();
 	mesh = nullptr;
 
-	clearLayers();
-}
-
-DOMAIN_TEMPLATE
-inline void Domain DOMAIN_TARGS::clearLayers() {
-	// Reset the layers
-	layers.cells.real.clear();
-	layers.cells.index.clear();
-	layers.edges.real.clear();
-	layers.edges.index.clear();
-}
-
-// Layer getters
-DOMAIN_TEMPLATE
-inline typename Domain DOMAIN_TARGS::RVector& Domain DOMAIN_TARGS::getRealLayer(const Layer& layer, const size_t& index) {
-	switch (layer) {
-		case Cell:
-			return layers.cells.real.at(index);
-		case Edge:
-			return layers.edges.real.at(index);
-	}
-	return *(RVector*)nullptr;	// Is never reached, WILL CRASH if somehow reached
-					// and is only here to remove that annoyting warning
-}
-
-DOMAIN_TEMPLATE
-inline typename Domain DOMAIN_TARGS::IVector& Domain DOMAIN_TARGS::getIndexLayer(const Layer& layer, const size_t& index) {
-	switch (layer) {
-		case Cell:
-			return layers.cells.index.at(index);
-		case Edge:
-			return layers.edges.index.at(index);
-	}
-	return *(IVector*)nullptr;	// Is never reached, WILL CRASH if somehow reached
-					// and is only here to remove that annoyting warning
-}
-
-DOMAIN_TEMPLATE
-inline size_t Domain DOMAIN_TARGS::addRealLayer(const Layer& layer) {
-	switch (layer) {
-		case Cell: {
-			const auto cells = mesh->template getEntitiesCount<MeshType::getMeshDimension()>();
-			layers.cells.real.push_back(RVector(cells));
-			return layers.cells.real.size() - 1;
-			}
-		case Edge: {
-			const auto edges = mesh->template getEntitiesCount<MeshType::getMeshDimension() - 1>();
-			layers.edges.real.push_back(RVector(edges));
-			return layers.edges.real.size() - 1;
-			}
-	}
-	return -1;
-}
-
-DOMAIN_TEMPLATE
-inline size_t Domain DOMAIN_TARGS::addIndexLayer(const Layer& layer) {
-	switch (layer) {
-		case Cell: {
-			const auto cells = mesh->template getEntitiesCount<MeshType::getMeshDimension()>();
-			layers.cells.index.push_back(IVector(cells));
-			return layers.cells.index.size() - 1;
-			}
-		case Edge: {
-			const auto edges = mesh->template getEntitiesCount<MeshType::getMeshDimension() - 1>();
-			layers.edges.index.push_back(IVector(edges));
-			return layers.edges.index.size() - 1;
-			}
-	}
-	return -1;
+	layers.cell.clear();
+	layers.edge.clear();
 }
 
 // Generators
@@ -145,6 +84,8 @@ bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, const Index
 
 	builder.build(*mesh);
 
+	updateLayerSizes();
+
 	return true;
 }
 
@@ -163,6 +104,8 @@ bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Index& Ny,
 
 	std::cerr << "TODO: implement" << std::endl; // TODO
 	return false;
+
+	updateLayerSizes();
 
 	return true;
 }
@@ -186,7 +129,10 @@ bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
 		*mesh = *(MeshType*)&loadedMesh;// This is evil and hacky but it gets the work done
 						// And since we check for type mismatch it should
 						// not crash
+		updateLayerSizes();
+
 		// TODO: find a way to get data layers too
+
 		return true;
 	};
 
@@ -202,24 +148,23 @@ inline bool Domain DOMAIN_TARGS::write(const std::string& filename) {
 		return false;
 	}
 
-	using Writer = TNL::Meshes::Writers::VTKWriter<MeshType>;
-	Writer writer(file);
+	MeshWriter writer(file);
 	writer.template writeEntities<MeshType::getMeshDimension()>(*mesh);
 
 	// Write cell index layer
-	IVector layer(mesh->template getEntitiesCount<MeshType::getMeshDimension()>());
+	TNL::Containers::Vector<Index, Device> layer(mesh->template getEntitiesCount<MeshType::getMeshDimension()>());
 	layer.forAllElements([] (int i, Index& v) { v = i; });
 	writer.writeCellData(layer, "cell_index");
 
 	// Write layers
-	for (int i = 0; i < layers.cells.real.size(); ++i)
-		writer.writeCellData(layers.cells.real.at(i), "cell_real_layer_" + std::to_string(i));
-	for (int i = 0; i < layers.cells.index.size(); ++i)
-		writer.writeCellData(layers.cells.index.at(i), "cell_index_layer_" + std::to_string(i));
-	for (int i = 0; i < layers.edges.real.size(); ++i)
-		writer.writeCellData(layers.edges.real.at(i), "edge_real_layer_" + std::to_string(i));
-	for (int i = 0; i < layers.edges.index.size(); ++i)
-		writer.writeCellData(layers.edges.index.at(i), "edge_index_layer_" + std::to_string(i));
+	for (int i = 0; i < layers.cell.count(); ++i)
+		layers.cell.getBasePtr(i)->writeCellData(writer, "cell_layer_" + std::to_string(i));
+	/*
+	 * This will crash because there's more data than there is cells
+	 * TODO: Find a way to save edge data
+	for (int i = 0; i < layers.edge.count(); ++i)
+		layers.edge.getBasePtr(i)->writeCellData(writer, "edge_layer_" + std::to_string(i));
+	 */
 
 	return true;
 }
