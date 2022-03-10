@@ -1,7 +1,6 @@
 #pragma once
 
 // STL headers
-#include <iostream>
 #include <fstream>
 
 // TNL headers

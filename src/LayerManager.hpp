@@ -8,8 +8,7 @@
 #include <TNL/Containers/Vector.h>
 
 template <class Index, typename Writer>
-class LayerBase {
-	public:
+struct LayerBase {
 	virtual void setSize(const Index& size) = 0;
 	virtual Index getSize() const = 0;
 	virtual void writeCellData(Writer& writer, const std::string& name) = 0;
@@ -22,6 +21,10 @@ struct Layer : public LayerBase<Index, Writer> {
 	Vector data;
 	Layer(const Index& size) {
 		setSize(size);
+	}
+	Layer(const Index& size, const Data& initializer) {
+		setSize(size);
+		data.forAllElements([&] (Index i, Data& val) { val = initializer; });
 	}
 	void setSize(const Index& size) {
 		data.setSize(size);
@@ -50,7 +53,7 @@ class LayerManager {
 		for (auto& layer : layers) layer->setSize(size);
 	}
 
-	std::size_t count() { return layers.size(); }
+	std::size_t count() const { return layers.size(); }
 
 	void clear() {
 		while (!layers.empty()) {
@@ -60,8 +63,8 @@ class LayerManager {
 	}
 
 	template <typename Data>
-	std::size_t add() {
-		Layer<Data, Device, Index, Writer>* layer = new Layer<Data, Device, Index, Writer>(size);
+	std::size_t add(const Data& value = Data()) {
+		Layer<Data, Device, Index, Writer>* layer = new Layer<Data, Device, Index, Writer>(size, value);
 		layers.push_back(layer);
 		return layers.size() - 1;
 	}

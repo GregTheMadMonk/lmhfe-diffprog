@@ -1,6 +1,7 @@
 #pragma once
 
 // STL headers
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -50,8 +51,16 @@ class Domain {
 	Domain()		= default;
 	Domain(const Domain& d2)= default;
 	Domain(Domain&& d2)	= default;
-	Domain& operator=(const Domain& d2)	= default;
-	Domain& operator=(Domain&& d2)		= default;
+	Domain& operator=(const Domain& d2) {
+		mesh = std::make_unique<MeshType>(*d2.mesh);
+		layers = d2.layers;
+		return *this;
+	}
+	Domain& operator=(Domain&& d2) {
+		mesh = std::move(d2.mesh);
+		layers = std::move(d2.layers);
+		return *this;
+	}
 
 	// Clear mesh data
 	void clear();
@@ -87,6 +96,15 @@ class Domain {
 
 	// Write mesh data to a file
 	bool write(const std::string& filename);
+
+	// Output domain
+	friend std::ostream& operator<<(std::ostream& stream, const Domain& d) {
+		stream << "Domain: " << std::endl;
+		stream << "\tMesh cells: " << d.getEntitiesCount() << std::endl;
+		stream << "\tCell layers: " << d.layers.cell.count() << std::endl;
+		stream << "\tEdge layers: " << d.layers.edge.count() << std::endl;
+		return stream;
+	}
 }; // --> class Domain
 
 #include "Domain_impl.hpp"
