@@ -1,6 +1,7 @@
 #pragma once
 
 // STL headers
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -44,7 +45,10 @@ struct Layer : public LayerBase<Index, Writer> {
 
 template <typename Index, typename Device, typename Writer>
 class LayerManager {
-	std::vector<LayerBase<Index, Writer>*> layers;
+	using LayerBase_p = std::shared_ptr<LayerBase<Index, Writer>>;
+	template <typename Data> using LayerType = Layer<Data, Device, Index, Writer>;
+	template <typename Data> using Layer_p = std::shared_ptr<LayerType<Data>>;
+	std::vector<LayerBase_p> layers;
 	Index size;
 
 	public:
@@ -56,21 +60,18 @@ class LayerManager {
 	std::size_t count() const { return layers.size(); }
 
 	void clear() {
-		while (!layers.empty()) {
-			delete layers.at(0);
-			layers.erase(layers.begin());
-		}
+		while (!layers.empty())	layers.erase(layers.begin());
 	}
 
 	template <typename Data>
 	std::size_t add(const Data& value = Data()) {
-		Layer<Data, Device, Index, Writer>* layer = new Layer<Data, Device, Index, Writer>(size, value);
+		LayerBase_p layer = std::make_shared<Layer<Data, Device, Index, Writer>>(size, value);
 		layers.push_back(layer);
 		return layers.size() - 1;
 	}
 	template <typename Data>
 	Layer<Data, Device, Index, Writer>& get(const std::size_t& index) {
-		const auto ptr = dynamic_cast<Layer<Data, Device, Index, Writer>*>(layers.at(index));
+		const auto ptr = std::dynamic_pointer_cast<LayerType<Data>>(layers.at(index));
 		// dynamic_cast will return nullptr on child template type mismatch
 		if (ptr == nullptr) throw std::runtime_error("Couldn't return layer, probably wrong data type!");
 		return *ptr;
