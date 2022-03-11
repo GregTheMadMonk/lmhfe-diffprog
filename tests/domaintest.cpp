@@ -19,6 +19,10 @@ int main() {
 	domain2.layers.cell.template get<float>(layer).data.forAllElements([] (int i, float& v) {
 		v = sin(i * 0.1);
 	});
+	const auto layer2 = domain2.layers.edge.template add<float>();
+	domain2.layers.edge.template get<float>(layer2).data.forAllElements([] (int i, float& v) {
+		v = sin(.1 * i);
+	});
 	domain2.write("domain2.vtk");
 
 	auto domain3 = move(domain2);

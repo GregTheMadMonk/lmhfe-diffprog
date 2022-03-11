@@ -76,7 +76,7 @@ class LayerManager {
 		if (ptr == nullptr) throw std::runtime_error("Couldn't return layer, probably wrong data type!");
 		return *ptr;
 	}
-	LayerBase<Index, Writer>* getBasePtr(const std::size_t& index) {
+	LayerBase_p getBasePtr(const std::size_t& index) {
 		return layers.at(index);
 	}
 };

@@ -88,6 +88,20 @@ class Domain {
 	auto getSubentitiesCount(typename MeshType::GlobalIndexType index) const {
 		return mesh->template getSubentitiesCount<eDimension, sDimension>(index);
 	}
+	template <int eDimension = dimensions(), int sDimension = eDimension - 1>
+	auto getSubentityIndex(typename MeshType::GlobalIndexType eIndex,
+				typename MeshType::GlobalIndexType sIndex) {
+		return mesh->template getSubentityIndex<eDimension, sDimension>(eIndex, sIndex);
+	}
+	template <int eDimension = dimensions() - 1, int sDimension = eDimension + 1>
+	auto getSuperentitiesCount(typename MeshType::GlobalIndexType index) {
+		return mesh->template getSuperentitiesCount<eDimension, sDimension>(index);
+	}
+	template <int eDimension = dimensions() - 1, int sDimension = eDimension + 1>
+	auto getSuperentityIndex(typename MeshType::GlobalIndexType eIndex,
+				typename MeshType::LocalIndexType sIndex) {
+		return mesh->template getSuperentityIndex<eDimension, sDimension>(eIndex, sIndex);
+	}
 
 	// Some generator functions
 	bool generateRectangularDomain(const Index& Nx, const Index& Ny, const Real& dx, const Real& dy);
