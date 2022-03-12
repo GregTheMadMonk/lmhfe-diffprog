@@ -45,21 +45,6 @@ class Domain {
 
 	static constexpr int dimensions() { return MeshType::getMeshDimension(); }
 
-	// Constructors
-	Domain()		= default;
-	Domain(const Domain& d2)= default;
-	Domain(Domain&& d2)	= default;
-	Domain& operator=(const Domain& d2) {
-		mesh = d2.mesh;
-		layers = d2.layers;
-		return *this;
-	}
-	Domain& operator=(Domain&& d2) {
-		mesh = std::move(d2.mesh);
-		layers = std::move(d2.layers);
-		return *this;
-	}
-
 	// Clear mesh data
 	void clear();
 
@@ -88,16 +73,16 @@ class Domain {
 	}
 	template <int eDimension = dimensions(), int sDimension = eDimension - 1>
 	auto getSubentityIndex(typename MeshType::GlobalIndexType eIndex,
-				typename MeshType::GlobalIndexType sIndex) {
+				typename MeshType::GlobalIndexType sIndex) const {
 		return mesh.value().template getSubentityIndex<eDimension, sDimension>(eIndex, sIndex);
 	}
 	template <int eDimension = dimensions() - 1, int sDimension = eDimension + 1>
-	auto getSuperentitiesCount(typename MeshType::GlobalIndexType index) {
+	auto getSuperentitiesCount(typename MeshType::GlobalIndexType index) const {
 		return mesh.value().template getSuperentitiesCount<eDimension, sDimension>(index);
 	}
 	template <int eDimension = dimensions() - 1, int sDimension = eDimension + 1>
 	auto getSuperentityIndex(typename MeshType::GlobalIndexType eIndex,
-				typename MeshType::LocalIndexType sIndex) {
+				typename MeshType::LocalIndexType sIndex) const {
 		return mesh.value().template getSuperentityIndex<eDimension, sDimension>(eIndex, sIndex);
 	}
 
