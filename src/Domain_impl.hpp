@@ -25,7 +25,6 @@ inline void Domain DOMAIN_TARGS::clear() {
 
 	// Reset the mesh
 	mesh.reset();
-	mesh = nullptr;
 
 	layers.cell.clear();
 	layers.edge.clear();
@@ -34,7 +33,7 @@ inline void Domain DOMAIN_TARGS::clear() {
 // Generators
 DOMAIN_TEMPLATE
 bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, const Index& Ny, const Real& dx, const Real& dy) {
-	if (mesh != nullptr) {
+	if (mesh != std::nullopt) {
 		std::cerr << "Mesh data is not empty, was clear() called?" << std::endl;
 		return false;
 	}
@@ -43,7 +42,7 @@ bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, const Index
 		return false;
 	}
 
-	mesh = std::make_unique<MeshType>();
+	mesh = MeshType();
 
 	using Builder = TNL::Meshes::MeshBuilder<MeshType>;
 	Builder builder;
@@ -81,7 +80,7 @@ bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, const Index
 	};
 	TNL::Algorithms::ParallelFor3D<TNL::Devices::Host>::exec(0, 0, 0, Nx, Ny, 2, fill_elems);
 
-	builder.build(*mesh);
+	builder.build(mesh.value());
 
 	updateLayerSizes();
 
@@ -90,7 +89,7 @@ bool Domain DOMAIN_TARGS::generateRectangularDomain(const Index& Nx, const Index
 
 DOMAIN_TEMPLATE
 bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Index& Ny, const Index& Nz, const Real& dx, const Real& dy) {
-	if (mesh != nullptr) {
+	if (mesh != std::nullopt) {
 		std::cerr << "Mesh data is not empty, was clear() called?" << std::endl;
 		return false;
 	}
@@ -99,7 +98,7 @@ bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Index& Ny,
 		return false;
 	}
 
-	mesh = std::make_unique<MeshType>();
+	mesh = MeshType();
 
 	std::cerr << "TODO: implement" << std::endl; // TODO
 	return false;
@@ -111,12 +110,10 @@ bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Index& Ny,
 
 DOMAIN_TEMPLATE
 bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
-	if (mesh != nullptr) {
+	if (mesh != std::nullopt) {
 		std::cerr << "Mesh data is not empty, was clear() called?" << std::endl;
 		return false;
 	}
-
-	mesh = std::make_unique<MeshType>();
 
 	auto loader = [&] (auto& reader, auto&& loadedMesh) {
 		if (typeid(loadedMesh) != typeid(MeshType)) {
@@ -125,7 +122,7 @@ bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
 				<< ")!" << std::endl;
 			return false;
 		}
-		*mesh = *(MeshType*)&loadedMesh;// This is evil and hacky but it gets the work done
+		mesh = *(MeshType*)&loadedMesh;// This is evil and hacky but it gets the work done
 						// And since we check for type mismatch it should
 						// not crash
 		updateLayerSizes();
@@ -141,6 +138,11 @@ bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
 
 DOMAIN_TEMPLATE
 inline bool Domain DOMAIN_TARGS::write(const std::string& filename) {
+	if (mesh == std::nullopt) {
+		std::cerr << "Mesh is empty! Could not save." << std::endl;
+		return false;
+	}
+
 	std::ofstream file(filename);
 	if (!file.is_open()) {
 		std::cerr << "Could not open file for writing: " << filename << std::endl;
@@ -148,10 +150,10 @@ inline bool Domain DOMAIN_TARGS::write(const std::string& filename) {
 	}
 
 	MeshWriter writer(file);
-	writer.template writeEntities<MeshType::getMeshDimension()>(*mesh);
+	writer.template writeEntities<MeshType::getMeshDimension()>(mesh.value());
 
 	// Write cell index layer
-	TNL::Containers::Vector<Index, Device> layer(mesh->template getEntitiesCount<MeshType::getMeshDimension()>());
+	TNL::Containers::Vector<Index, Device> layer(mesh.value().template getEntitiesCount<MeshType::getMeshDimension()>());
 	layer.forAllElements([] (int i, Index& v) { v = i; });
 	writer.writeCellData(layer, "cell_index");
 

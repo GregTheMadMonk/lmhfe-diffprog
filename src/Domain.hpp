@@ -2,8 +2,8 @@
 
 // STL headers
 #include <iostream>
+#include <optional>
 #include <string>
-#include <vector>
 
 // TNL headers
 #include <TNL/Meshes/DefaultConfig.h>
@@ -29,13 +29,11 @@ class Domain {
 	// instead of default 'int', so we have to account for that here
 	using MeshConfig	= TNL::Meshes::DefaultConfig<CellTopology, CellTopology::dimension, Real, long int>;
 	using MeshType		= TNL::Meshes::Mesh<MeshConfig>;// Meshes are only implemented for Host (?)
-	using Mesh_p		= std::unique_ptr<MeshType>;	// Mesh is only accessible from inside a class,
-						// and isn't passed by pointer, so unique_ptr should be sufficient
 	using MeshWriter = TNL::Meshes::Writers::VTKWriter<MeshType>;
 
 	protected:
 	// Domain mesh
-	Mesh_p mesh = nullptr;
+	std::optional<MeshType> mesh = std::nullopt;
 
 	void updateLayerSizes();
 
@@ -52,7 +50,7 @@ class Domain {
 	Domain(const Domain& d2)= default;
 	Domain(Domain&& d2)	= default;
 	Domain& operator=(const Domain& d2) {
-		mesh = std::make_unique<MeshType>(*d2.mesh);
+		mesh = d2.mesh;
 		layers = d2.layers;
 		return *this;
 	}
@@ -65,42 +63,42 @@ class Domain {
 	// Clear mesh data
 	void clear();
 
-	bool isClean() const { return mesh == nullptr; }
+	bool isClean() const { return mesh == std::nullopt; }
 
 	// Mesh iterating
 	// These repeat 'Mesh' methods (basically call them)
 	// Pretend this is 'readable'
 	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
-	void forAll(Func f)	{ mesh->template forAll<dimension, Device2>(f);		}
+	void forAll(Func f)	{ mesh.value().template forAll<dimension, Device2>(f);		}
 	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
-	void forBoundary(Func f){ mesh->template forBoundary<dimension, Device2>(f);	}
+	void forBoundary(Func f){ mesh.value().template forBoundary<dimension, Device2>(f);	}
 	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
-	void forGhost(Func f)	{ mesh->template forGhost<dimension, Device2>(f);	}
+	void forGhost(Func f)	{ mesh.value().template forGhost<dimension, Device2>(f);	}
 	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
-	void forInterior(Func f){ mesh->template forInterior<dimension, Device2>(f);	}
+	void forInterior(Func f){ mesh.value().template forInterior<dimension, Device2>(f);	}
 	template <int dimension = dimensions(), typename Device2 = Device, typename Func>
-	void forLocal(Func f)	{ mesh->template forLocal<dimension, Device2>(f);	}
+	void forLocal(Func f)	{ mesh.value().template forLocal<dimension, Device2>(f);	}
 
 	// Mesh parameter getters
 	template <int dimension = dimensions()>
-	auto getEntitiesCount() const { return mesh->template getEntitiesCount<dimension>(); }
+	auto getEntitiesCount() const { return mesh.value().template getEntitiesCount<dimension>(); }
 	template <int eDimension = dimensions(), int sDimension = eDimension - 1>
 	auto getSubentitiesCount(typename MeshType::GlobalIndexType index) const {
-		return mesh->template getSubentitiesCount<eDimension, sDimension>(index);
+		return mesh.value().template getSubentitiesCount<eDimension, sDimension>(index);
 	}
 	template <int eDimension = dimensions(), int sDimension = eDimension - 1>
 	auto getSubentityIndex(typename MeshType::GlobalIndexType eIndex,
 				typename MeshType::GlobalIndexType sIndex) {
-		return mesh->template getSubentityIndex<eDimension, sDimension>(eIndex, sIndex);
+		return mesh.value().template getSubentityIndex<eDimension, sDimension>(eIndex, sIndex);
 	}
 	template <int eDimension = dimensions() - 1, int sDimension = eDimension + 1>
 	auto getSuperentitiesCount(typename MeshType::GlobalIndexType index) {
-		return mesh->template getSuperentitiesCount<eDimension, sDimension>(index);
+		return mesh.value().template getSuperentitiesCount<eDimension, sDimension>(index);
 	}
 	template <int eDimension = dimensions() - 1, int sDimension = eDimension + 1>
 	auto getSuperentityIndex(typename MeshType::GlobalIndexType eIndex,
 				typename MeshType::LocalIndexType sIndex) {
-		return mesh->template getSuperentityIndex<eDimension, sDimension>(eIndex, sIndex);
+		return mesh.value().template getSuperentityIndex<eDimension, sDimension>(eIndex, sIndex);
 	}
 
 	// Some generator functions
