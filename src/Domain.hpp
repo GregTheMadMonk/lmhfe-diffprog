@@ -9,7 +9,7 @@
 #include <TNL/Meshes/DefaultConfig.h>
 #include <TNL/Meshes/Mesh.h>
 #include <TNL/Meshes/TypeResolver/BuildConfigTags.h>
-#include <TNL/Meshes/Writers/VTKWriter.h>
+#include <TNL/Meshes/Writers/VTUWriter.h>
 
 // Local headers
 #include "LayerManager.hpp"
@@ -29,7 +29,7 @@ class Domain {
 	// instead of default 'int', so we have to account for that here
 	using MeshConfig	= TNL::Meshes::DefaultConfig<CellTopology, CellTopology::dimension, Real, long int>;
 	using MeshType		= TNL::Meshes::Mesh<MeshConfig>;// Meshes are only implemented for Host (?)
-	using MeshWriter = TNL::Meshes::Writers::VTKWriter<MeshType>;
+	using MeshWriter = TNL::Meshes::Writers::VTUWriter<MeshType>;
 
 	protected:
 	// Domain mesh

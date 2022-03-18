@@ -8,6 +8,11 @@
 // TNL headers
 #include <TNL/Containers/Vector.h>
 
+/*
+ * TODO: Remake this, since mesh readers can only read a variant
+ * of hardcoded types
+ */
+
 template <class Index, typename Writer>
 struct LayerBase {
 	virtual void setSize(const Index& size) = 0;

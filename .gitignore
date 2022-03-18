@@ -1,5 +1,6 @@
 saved
 build
 *.vtk
+*.vtu
 *.dat
 *.csv

@@ -12,9 +12,9 @@ int main() {
 
 	DomainType domain;
 	domain.generateRectangularDomain(10, 10, 1, 1);
-	domain.write("domain1.vtk");
+	domain.write("domain1.vtu");
 	DomainType domain2;
-	domain2.loadFromMesh("domain1.vtk");
+	domain2.loadFromMesh("domain1.vtu");
 	const auto layer = domain2.layers.cell.template add<float>();
 	domain2.layers.cell.template get<float>(layer).data.forAllElements([] (int i, float& v) {
 		v = sin(i * 0.1);
@@ -23,11 +23,29 @@ int main() {
 	domain2.layers.edge.template get<float>(layer2).data.forAllElements([] (int i, float& v) {
 		v = sin(.1 * i);
 	});
-	domain2.write("domain2.vtk");
+	domain2.write("domain2.vtu");
 
-	auto domain3 = move(domain2);
+	auto domain3 = domain2;
 	domain3.clear();
 	domain3.generateRectangularDomain(20, 20, .5, .5);
-	domain3.write("domain3.vtk");
+	domain3.write("domain3.vtu");
+
+	auto domain4 = move(domain2);
+
+	try {
+		domain2.layers.edge.template get<float>(layer2).data;
+	} catch (...) {
+		cout << "Move worked, couldn't access domain2's layers!" << endl;
+	}
+
+	domain4.write("domain4.vtu");
+	domain2 = move(domain4); // This crashes because layers need to be reimplemented
+
+	try {
+		domain2.layers.edge.template get<float>(layer2).data;
+	} catch (...) {
+		cout << "Data didn't move back!" << endl;
+	}
+
 	return 0;
 }

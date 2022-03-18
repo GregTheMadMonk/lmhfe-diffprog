@@ -5,7 +5,7 @@ OUTPUT_DIR=./build
 INCLUDE_DIRS=-I./includes/tnl/src -I./includes/tnl/src/3rdparty/ -I./src
 
 # Flags for both g++ and nvcc
-FLAGS=-g -std=c++17 -lstdc++fs
+FLAGS=-g -std=c++17 -lstdc++fs -DHAVE_TINYXML2 -ltinyxml2
 # g++-specific flags
 GCPP_FLAGS=-fopenmp -Winline
 # nvcc-specific flags
