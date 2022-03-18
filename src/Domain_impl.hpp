@@ -164,9 +164,9 @@ inline bool Domain DOMAIN_TARGS::write(const std::filesystem::path& filename) {
 
 	// Write layers
 	for (int i = 0; i < layers.cell.count(); ++i)
-		layers.cell.getBasePtr(i)->writeCellData(writer, "cell_layer_" + std::to_string(i));
+		layers.cell.getLayer(i).writeCellData(writer, "cell_layer_" + std::to_string(i));
 	for (int i = 0; i < layers.edge.count(); ++i)
-		layers.edge.getBasePtr(i)->writeDataArray(writer, "edge_layer_" + std::to_string(i));
+		layers.edge.getLayer(i).writeDataArray(writer, "edge_layer_" + std::to_string(i));
 
 	return true;
 }

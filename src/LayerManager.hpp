@@ -1,87 +1,178 @@
 #pragma once
 
 // STL headers
+#include <cassert>
 #include <memory>
-#include <string>
-#include <vector>
+#include <variant>
 
 // TNL headers
 #include <TNL/Containers/Vector.h>
 
-/*
- * TODO: Remake this, since mesh readers can only read a variant
- * of hardcoded types
- */
+#define LVFOR(VARIANT, WHAT) switch (VARIANT.index()) {\
+		case Layer::VType::I8:\
+			WHAT(std::get<Vector<std::int8_t>>(VARIANT));\
+			break;\
+		case Layer::VType::UI8:\
+			WHAT(std::get<Vector<std::uint8_t>>(VARIANT));\
+			break;\
+		case Layer::VType::I16:\
+			WHAT(std::get<Vector<std::int16_t>>(VARIANT));\
+			break;\
+		case Layer::VType::UI16:\
+			WHAT(std::get<Vector<std::uint16_t>>(VARIANT));\
+			break;\
+		case Layer::VType::I32:\
+			WHAT(std::get<Vector<std::int32_t>>(VARIANT));\
+			break;\
+		case Layer::VType::UI32:\
+			WHAT(std::get<Vector<std::uint32_t>>(VARIANT));\
+			break;\
+		case Layer::VType::I64:\
+			WHAT(std::get<Vector<std::int64_t>>(VARIANT));\
+			break;\
+		case Layer::VType::UI64:\
+			WHAT(std::get<Vector<std::uint64_t>>(VARIANT));\
+			break;\
+		case Layer::VType::FLOAT:\
+			WHAT(std::get<Vector<float>>(VARIANT));\
+			break;\
+		case Layer::VType::DOUBLE:\
+			WHAT(std::get<Vector<double>>(VARIANT));\
+			break;\
+	}
 
-template <class Index, typename Writer>
-struct LayerBase {
-	virtual void setSize(const Index& size) = 0;
-	virtual Index getSize() const = 0;
-	virtual void writeCellData(Writer& writer, const std::string& name) = 0;
-	virtual void writeDataArray(Writer& writer, const std::string& name) = 0;
-};
+template <typename Device = TNL::Devices::Host, typename Index = int>
+struct Layer {
+	// TNL::Meshes::Readers::MeshReader has std::vector as mesh data container.
+	// We want to be able to store data on different devices, hence we also
+	// have to hard-code our own variant of TNL::Containers::Vector's
+	public:
+	template <typename DataType> using Vector = TNL::Containers::Vector<DataType, Device, Index>;
+	using VariantVector = std::variant< Vector< std::int8_t >,
+						Vector< std::uint8_t >,
+						Vector< std::int16_t >,
+						Vector< std::uint16_t >,
+						Vector< std::int32_t >,
+						Vector< std::uint32_t >,
+						Vector< std::int64_t >,
+						Vector< std::uint64_t >,
+						Vector< float >,
+						Vector< double > >;
 
-template <typename Data, typename Device, typename Index, typename Writer>
-struct Layer : public LayerBase<Index, Writer> {
-	using Vector = TNL::Containers::Vector<Data, Device, Index>;
-	Vector data;
-	Layer(const Index& size) {
-		setSize(size);
-	}
-	Layer(const Index& size, const Data& initializer) {
-		setSize(size);
-		data.forAllElements([&] (Index i, Data& val) { val = initializer; });
-	}
-	void setSize(const Index& size) {
-		data.setSize(size);
-	}
-	Data& operator[](const Index& index) {
-		return data[index];
-	}
-	Index getSize() const { return data.getSize(); }
-
-	void writeCellData(Writer& writer, const std::string& name) {
-		writer.writeCellData(data, name);
-	}
-	void writeDataArray(Writer& writer, const std::string& name) {
-		writer.writeDataArray(data, name);
-	}
-};
-
-template <typename Index, typename Device, typename Writer>
-class LayerManager {
-	using LayerBase_p = std::shared_ptr<LayerBase<Index, Writer>>;
-	template <typename Data> using LayerType = Layer<Data, Device, Index, Writer>;
-	template <typename Data> using Layer_p = std::shared_ptr<LayerType<Data>>;
-	std::vector<LayerBase_p> layers;
+	protected:
+	VariantVector data;
 	Index size;
 
 	public:
+	enum VType : std::size_t {
+		// Corresponds to TNL::Meshes::Readers::MeshReader::VariantVector too
+		I8	= 0,
+		UI8	= 1,
+		I16	= 2,
+		UI16	= 3,
+		I32	= 4,
+		UI32	= 5,
+		I64	= 6,
+		UI64	= 7,
+		FLOAT	= 8,
+		DOUBLE	= 9
+	};
+
+	template <typename DataType>
+	void init(const Index& newSize, const DataType& value = DataType()) {
+		size = newSize;
+		data = Vector<DataType>(size);
+	}
 	void setSize(const Index& newSize) {
 		size = newSize;
-		for (auto& layer : layers) layer->setSize(size);
+		const auto setSize_f = [&] (auto& v) {
+			v.setSize(size);
+		};
+		LVFOR(data, setSize_f);
+	}
+	const Index& getSize() const { return size; }
+
+	template <typename DataType>
+	void setFrom(const std::vector<DataType>& from) {
+		assert(("Source size must be equal to layer size", size == from.size()));
+
+		data = Vector<DataType>(size);
+		std::get<Vector<DataType>>(data).forAllElements([&] (Index i, DataType& v) {
+			v = from.at(i);
+		});
 	}
 
+	template <typename DataType>
+	void setFrom(const Vector<DataType>& from) {
+		assert(("Source size must be equal to layer size", size == from.size()));
+
+		data = Vector<DataType>(size);
+		std::get<Vector<DataType>>(data).forAllElements([&] (Index i, DataType& v) {
+			v = from[i];
+		});
+	}
+
+	template <typename DataType>
+	DataType& operator[](const Index& index) {
+		return std::get<Vector<DataType>>(data)[index];
+	}
+
+	template <typename DataType>
+	Vector<DataType>& get() {
+		return std::get<Vector<DataType>>(data);
+	}
+
+	template <typename DataType>
+	static Layer makeLayer(const Index& size, const DataType& value = DataType()) {
+		Layer l;
+		l.template init(size, value);
+		return l;
+	}
+
+	template <typename Writer>
+	void writeCellData(Writer& writer, const std::string& name) {
+		const auto writeCellData_f = [&] (auto& v) {
+			writer.writeCellData(v, name);
+		};
+		LVFOR(data, writeCellData_f);
+	}
+	template <typename Writer>
+	void writeDataArray(Writer& writer, const std::string& name) {
+		const auto writeDataArray_f = [&] (auto& v) {
+			writer.writeDataArray(v, name);
+		};
+		LVFOR(data, writeDataArray_f);
+	}
+};
+
+template <typename Device = TNL::Devices::Host, typename Index = int>
+class LayerManager {
+	using LayerType = Layer<Device, Index>;
+	std::vector<Layer<Device, Index>> layers;
+	Index size;
+	public:
+	void setSize(const Index& newSize) {
+		size = newSize;
+		for (auto& layer : layers) layer.setSize(size);
+	}
 	std::size_t count() const { return layers.size(); }
 
 	void clear() {
-		while (!layers.empty())	layers.erase(layers.begin());
+		while (!layers.empty()) layers.erase(layers.begin());
 	}
 
-	template <typename Data>
-	std::size_t add(const Data& value = Data()) {
-		LayerBase_p layer = std::make_shared<Layer<Data, Device, Index, Writer>>(size, value);
-		layers.push_back(layer);
+	template <typename DataType>
+	std::size_t add(const DataType& value = DataType()) {
+		layers.push_back(LayerType::template makeLayer<DataType>(size, value));
 		return layers.size() - 1;
 	}
-	template <typename Data>
-	Layer<Data, Device, Index, Writer>& get(const std::size_t& index) {
-		const auto ptr = std::dynamic_pointer_cast<LayerType<Data>>(layers.at(index));
-		// dynamic_cast will return nullptr on child template type mismatch
-		if (ptr == nullptr) throw std::runtime_error("Couldn't return layer, probably wrong data type!");
-		return *ptr;
+
+	template <typename DataType>
+	typename LayerType::Vector<DataType>& get(const std::size_t& index) {
+		return layers.at(index).template get<DataType>();
 	}
-	LayerBase_p getBasePtr(const std::size_t& index) {
+
+	LayerType& getLayer(const std::size_t& index) {
 		return layers.at(index);
 	}
 };

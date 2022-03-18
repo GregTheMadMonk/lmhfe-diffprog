@@ -40,8 +40,8 @@ class Domain {
 
 	public:
 	struct {
-		LayerManager<Index, Device, MeshWriter> cell;
-		LayerManager<Index, Device, MeshWriter> edge;
+		LayerManager<Device, Index> cell;
+		LayerManager<Device, Index> edge;
 	} layers;
 
 	static constexpr int dimensions() { return MeshType::getMeshDimension(); }
