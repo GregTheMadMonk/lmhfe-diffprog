@@ -1,6 +1,7 @@
 #pragma once
 
 // STL headers
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -89,10 +90,10 @@ class Domain {
 	// Some generator functions
 	bool generateRectangularDomain(const Index& Nx, const Index& Ny, const Real& dx, const Real& dy);
 	bool generateCuboidDomain(const Index& Nx, const Index& Ny, const Index& Nz, const Real& dx, const Real& dy);
-	bool loadFromMesh(const std::string& filename);
+	bool loadFromMesh(const std::filesystem::path& filename); // NOTE: replace std::filesystem::path with noa::utils::Path
 
 	// Write mesh data to a file
-	bool write(const std::string& filename);
+	bool write(const std::filesystem::path& filename);
 
 	// Output domain
 	friend std::ostream& operator<<(std::ostream& stream, const Domain& d) {

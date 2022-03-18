@@ -109,9 +109,14 @@ bool Domain DOMAIN_TARGS::generateCuboidDomain(const Index& Nx, const Index& Ny,
 }
 
 DOMAIN_TEMPLATE
-bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
+bool Domain DOMAIN_TARGS::loadFromMesh(const std::filesystem::path& filename) {
 	if (mesh != std::nullopt) {
 		std::cerr << "Mesh data is not empty, was clear() called?" << std::endl;
+		return false;
+	}
+
+	if (!std::filesystem::exists(filename)) {
+		std::cerr << "Mesh file doesn't exist:" << filename << std::endl;
 		return false;
 	}
 
@@ -137,7 +142,7 @@ bool Domain DOMAIN_TARGS::loadFromMesh(const std::string& filename) {
 }
 
 DOMAIN_TEMPLATE
-inline bool Domain DOMAIN_TARGS::write(const std::string& filename) {
+inline bool Domain DOMAIN_TARGS::write(const std::filesystem::path& filename) {
 	if (mesh == std::nullopt) {
 		std::cerr << "Mesh is empty! Could not save." << std::endl;
 		return false;
