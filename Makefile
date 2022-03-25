@@ -35,3 +35,4 @@ output_dir:
 
 clean:
 	rm -r $(OUTPUT_DIR)
+	rm *.vtu

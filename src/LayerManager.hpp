@@ -81,7 +81,7 @@ struct Layer {
 	template <typename DataType>
 	void init(const Index& newSize, const DataType& value = DataType()) {
 		size = newSize;
-		data = Vector<DataType>(size);
+		data = Vector<DataType>(size, value);
 	}
 	void setSize(const Index& newSize) {
 		size = newSize;
@@ -147,8 +147,11 @@ struct Layer {
 
 template <typename Device = TNL::Devices::Host, typename Index = int>
 class LayerManager {
+	public:
 	using LayerType = Layer<Device, Index>;
+	template <typename DataType> using Vector = TNL::Containers::Vector<DataType, Device, Index>;
 	std::vector<Layer<Device, Index>> layers;
+	protected:
 	Index size;
 	public:
 	void setSize(const Index& newSize) {
@@ -168,7 +171,7 @@ class LayerManager {
 	}
 
 	template <typename DataType>
-	typename LayerType::Vector<DataType>& get(const std::size_t& index) {
+	Vector<DataType>& get(const std::size_t& index) {
 		return layers.at(index).template get<DataType>();
 	}
 

@@ -9,6 +9,7 @@
 // TNL headers
 #include <TNL/Meshes/DefaultConfig.h>
 #include <TNL/Meshes/Mesh.h>
+#include <TNL/Meshes/Geometry/getEntityMeasure.h>
 #include <TNL/Meshes/TypeResolver/BuildConfigTags.h>
 #include <TNL/Meshes/Writers/VTUWriter.h>
 
@@ -30,7 +31,8 @@ class Domain {
 	// instead of default 'int', so we have to account for that here
 	using MeshConfig	= TNL::Meshes::DefaultConfig<CellTopology, CellTopology::dimension, Real, long int>;
 	using MeshType		= TNL::Meshes::Mesh<MeshConfig>;// Meshes are only implemented for Host (?)
-	using MeshWriter = TNL::Meshes::Writers::VTUWriter<MeshType>;
+	using MeshWriter	= TNL::Meshes::Writers::VTUWriter<MeshType>;
+	using LayerManagerType	= LayerManager<Device, Index>;
 
 	protected:
 	// Domain mesh
@@ -40,11 +42,13 @@ class Domain {
 
 	public:
 	struct {
-		LayerManager<Device, Index> cell;
-		LayerManager<Device, Index> edge;
+		LayerManagerType cell;
+		LayerManagerType edge;
 	} layers;
 
 	static constexpr int dimensions() { return MeshType::getMeshDimension(); }
+
+	// Contructors/operator='s/destructor
 
 	// Clear mesh data
 	void clear();
@@ -86,6 +90,12 @@ class Domain {
 				typename MeshType::LocalIndexType sIndex) const {
 		return mesh.value().template getSuperentityIndex<eDimension, sDimension>(eIndex, sIndex);
 	}
+	auto getCellMeasure(typename MeshType::GlobalIndexType index) const {
+		return getEntityMeasure(mesh.value(), mesh.value().template getEntity<typename MeshType::Cell>(index));
+	}
+
+	// Return read-only mesh reference
+	const MeshType& getMesh() const { return mesh.value(); }
 
 	// Some generator functions
 	bool generateRectangularDomain(const Index& Nx, const Index& Ny, const Real& dx, const Real& dy);
