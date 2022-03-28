@@ -132,7 +132,7 @@ class mhfe {
 				break;
 		}
 
-		return ret * (upper * 2 - 1);
+		return ret;
 	};
 	static v2d __cuda_callable__ edge_midpoint(const Index& edge, const Real& dx, const Real& dy, const Index& Nx, const Index& Ny) {
 		Index e1, e2;

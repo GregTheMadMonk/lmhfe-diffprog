@@ -40,5 +40,7 @@ int main() {
 
 		mhfe.snapshot("saved");
 	} while (mhfe.step());
+
+	cout << endl << "DONE" << endl;
 	return 0;
 }

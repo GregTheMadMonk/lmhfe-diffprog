@@ -22,6 +22,7 @@ inline void MHFE MHFE_TARGS::prepare() {
 	domain.layers.edge.clear();
 
 	domain.layers.cell.template add<Real>(0);	// Index 0, P
+	domain.layers.cell.template add<Real>(0);	// Index 1, P_PREV
 	domain.layers.edge.template add<Real>(0);	// Index 0, DIRICHLET
 	domain.layers.edge.template add<Real>(0);	// Index 1, NEUMANN
 	domain.layers.edge.template add<Real>(0);	// Index 2, TP
@@ -62,7 +63,8 @@ inline bool MHFE MHFE_TARGS::step() {
 
 	// Copy the previous solution
 	auto& P = domain.layers.cell.template get<Real>(Layer::P);
-	const auto PPrev(P);
+	auto& PPrev = domain.layers.cell.template get<Real>(Layer::P_PREV);
+	PPrev = P;
 
 	// System matrix
 	MatrixP m = std::make_shared<Matrix>(edges, edges);
@@ -72,6 +74,7 @@ inline bool MHFE MHFE_TARGS::step() {
 	auto mView = m->getView();
 
 	// Needed layer views
+	const auto PPrevView = PPrev.getConstView();
 	auto rightView = domain.layers.edge.template get<Real>(Layer::RIGHT).getView();
 	auto TPView = domain.layers.edge.template get<Real>(Layer::TP).getView();
 	const auto dMask = domain.layers.edge.template get<int>(Layer::DIRICHLET_MASK).getView();
@@ -82,11 +85,12 @@ inline bool MHFE MHFE_TARGS::step() {
 	// Reset the right part
 	rightView.forAllElements([] (Index i, Real& v) { v = 0; });
 
-	const auto Q_part = [&] (const Index& cell, const Index& edge, const Real& right) {
+	const auto Q_part = [&] (const Index& cell, const Index& edge, const Real& right = 0) {
 		const auto edgeCount = domain.getSubentitiesCount(cell);
 		const auto area = domain.getCellMeasure(cell);
 
 		const auto lambda = c * area / tau;
+		Real coeff1 = 0.0; // Equate to a * lambda / l / beta
 
 		for (Index lei = 0; lei < edgeCount; ++lei) {
 			const Index gEdge = domain.getSubentityIndex(cell, lei);
@@ -95,35 +99,32 @@ inline bool MHFE MHFE_TARGS::step() {
 			const auto beta = lambda + a * alpha;
 			const auto delta = a * (B - a / l / l / beta);
 			const auto lumping = 0;
+			coeff1 = a * lambda / l / beta;
 			mView.addElement(edge, gEdge, delta + lumping);
 		}
 
-		rightView[edge] += right;
+		// rightView[edge] += right + c * area * TPView[edge] / 3.0 / tau; // this is WITH lumping
+		rightView[edge] += right + coeff1 * PPrevView[cell];
 	};
 
 	domain.template forAll<DomainType::dimensions() - 1>([&] (Index edge) {
-		const auto eCells = domain.getSuperentitiesCount(edge);
-
 		if (dMask[edge] + nMask[edge] != 0) {
 			if (dMask[edge] != 0) {
 				mView.addElement(edge, edge, 1);
 				rightView[edge] += dView[edge];
 			}
 			if (nMask[edge] != 0) {
-				for (Index lCell = 0; lCell < eCells; ++lCell) {
-					const auto cell = domain.getSuperentityIndex(edge, lCell);
-					Q_part(cell, edge, 0);
-				}
-				rightView[edge] += nView[edge];
+				const auto cell = domain.getSuperentityIndex(edge, 0);
+				Q_part(cell, edge, nView[edge]);
 			}
 
 			return;
 		}
 
+		const auto eCells = domain.getSuperentitiesCount(edge);
 		for (Index lCell = 0; lCell < eCells; ++lCell) {
 			const auto cell = domain.getSuperentityIndex(edge, lCell);
-			const auto area = domain.getCellMeasure(cell);
-			Q_part(cell, edge, c * area * TPView[edge] / 3.0 / tau);
+			Q_part(cell, edge);
 		}
 	});
 
@@ -133,24 +134,11 @@ inline bool MHFE MHFE_TARGS::step() {
 	stepSolver->setMatrix(m);
 	// stepSolver->setPreconditioner(stepPrecond);
 
-	using IterativeSolverMonitorType = TNL::Solvers::IterativeSolverMonitor< Real, Index >;
-	IterativeSolverMonitorType monitor;
-	TNL::Solvers::SolverMonitorThread mmonitorThread(monitor);
-	monitor.setRefreshRate(10);  // refresh rate in milliseconds
-	monitor.setVerbose(1);
-	monitor.setStage( "Stage:" );
-	TNL::Timer timer;
-	monitor.setTimer( timer );
-	timer.start();
-	stepSolver->setSolverMonitor(monitor);
-
 	stepSolver->solve(rightView, TPView);
-	monitor.stopMainLoop();
 
-	std::cout << TPView << std::endl;
+	// std::cout << TPView << std::endl;
 
-	const auto PPrevView = PPrev.getConstView();
-	P.forAllElements([&] (Index cell, Real PCell) {
+	P.forAllElements([&] (Index cell, Real& PCell) {
 		const auto area = domain.getCellMeasure(cell);
 		const auto lambda = c * area / tau;
 		const auto [B, l] = B_inv(domain, 0, 0, cell);

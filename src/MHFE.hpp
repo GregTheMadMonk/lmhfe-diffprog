@@ -28,6 +28,7 @@ struct MHFE {
 	enum Layer : Index {
 		/* Real cell layers */
 		P		= 0,	// P over cells
+		P_PREV		= 1,	// P over cells
 		/* TODO: Layers for problem coefficients a&c */
 		/* Index cell layers */
 		// Nothing
@@ -85,20 +86,27 @@ std::tuple<Real, Real> B_inv(	const Domain<TNL::Meshes::Topologies::Triangle, De
 
 	Real sqSum = 0;
 
+	const auto cellE = domain.getMesh().template getEntity<2>(cell);
+	const auto cellCenter = TNL::Meshes::getEntityCenter(domain.getMesh(), cellE);
+
 	for (Index k = 0; k < 3; ++k) {
 		const auto edge = domain.template getSubentityIndex<2, 1>(cell, k);
 		const auto p1 = domain.getMesh().getPoint(domain.template getSubentityIndex<1, 0>(edge, 0));
 		const auto p2 = domain.getMesh().getPoint(domain.template getSubentityIndex<1, 0>(edge, 1));
 
-		const auto r = p2 - p1;
+		auto r = p2 - p1;
 
-		if (edge == edge1)	r1 = r;
-		else if (edge == edge2)	r2 = r;
+		const auto edgeE = domain.getMesh().template getEntity<1>(edge);
+		auto n = TNL::Meshes::getOutwardNormalVector(domain.getMesh(), edgeE, cellCenter);
+		const auto crossZ = n[0] * r[1] - n[1] * r[0];
+
+		if (edge == edge1)	r1 = (1 - 2 * (crossZ < 0)) * r;
+		if (edge == edge2)	r2 = (1 - 2 * (crossZ < 0)) * r;
 
 		sqSum += (r, r);
 	}
 
-	const auto area = domain.getCellMeasure(cell);
+	const auto area = TNL::Meshes::getEntityMeasure(domain.getMesh(), cellE);
 	const Real l = sqSum / 48.0 / area;
 
 	return std::make_tuple((r1, r2) / area + 1.0 / l / 3.0, l);

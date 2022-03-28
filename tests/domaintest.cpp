@@ -11,16 +11,17 @@ int main() {
 	using DomainType = Domain<TNL::Meshes::Topologies::Triangle>;
 
 	DomainType domain;
+
 	domain.generateRectangularDomain(10, 10, 1, 1);
 	domain.write("domain1.vtu");
 	DomainType domain2;
 	domain2.loadFromMesh("domain1.vtu");
 	const auto layer = domain2.layers.cell.template add<float>();
-	domain2.layers.cell.template get<float>(layer).data.forAllElements([] (int i, float& v) {
+	domain2.layers.cell.template get<float>(layer).forAllElements([] (int i, float& v) {
 		v = sin(i * 0.1);
 	});
 	const auto layer2 = domain2.layers.edge.template add<float>();
-	domain2.layers.edge.template get<float>(layer2).data.forAllElements([] (int i, float& v) {
+	domain2.layers.edge.template get<float>(layer2).forAllElements([] (int i, float& v) {
 		v = sin(.1 * i);
 	});
 	domain2.write("domain2.vtu");
@@ -33,16 +34,16 @@ int main() {
 	auto domain4 = move(domain2);
 
 	try {
-		domain2.layers.edge.template get<float>(layer2).data;
+		domain2.layers.edge.template get<float>(layer2);
 	} catch (...) {
 		cout << "Move worked, couldn't access domain2's layers!" << endl;
 	}
 
 	domain4.write("domain4.vtu");
-	domain2 = move(domain4); // This crashes because layers need to be reimplemented
+	domain2 = move(domain4); // This crashes because (why?)
 
 	try {
-		domain2.layers.edge.template get<float>(layer2).data;
+		domain2.layers.edge.template get<float>(layer2);
 	} catch (...) {
 		cout << "Data didn't move back!" << endl;
 	}
