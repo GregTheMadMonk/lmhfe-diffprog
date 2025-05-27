@@ -1,0 +1,283 @@
+export module mhfe:lmhfe;
+
+import dxx.assert;
+import math;
+import std;
+import utils;
+
+import :problem;
+
+namespace mhfe {
+
+export
+template <typename TReal>
+class LMHFE {
+public:
+    using Real = TReal;
+    using Problem = Problem<Real>;
+
+    inline constexpr
+    explicit LMHFE(const Problem& prob, Real c_tol)
+        : problem(prob)
+        , tol(c_tol)
+        , time{}
+        , solution(problem.cells)
+        , prev_solution(problem.cells)
+        , edge_solution(problem.edges)
+        , is_boundary(problem.edges)
+        , cell_measures(problem.cells)
+        , lambda(problem.cells)
+        , alpha_i(problem.cells)
+        , alpha(problem.cells)
+        , beta(problem.cells)
+        , l(problem.cells)
+        , sysmat(problem.edges, problem.edges)
+        , rhs(problem.edges)
+        , b_inv_data(problem.cells * 3 * 3)
+    {
+        dxx::assert::always(this->problem.is_valid());
+        this->prepare();
+    }
+
+    inline constexpr
+    void step() {
+        // Avoid expensive copy
+        std::swap(this->prev_solution, this->solution);
+
+        const auto& prob = this->problem;
+        const auto& mesh = prob.mesh;
+
+        for (auto [ e_idx, edge ] : enumerate(mesh.edges)) {
+            this->rhs[e_idx] =
+                prob.neumann_mask[e_idx] * prob.neumann[e_idx]
+                + prob.dirichlet_mask[e_idx] * prob.dirichlet[e_idx];
+
+            if (prob.dirichlet_mask[e_idx] && !prob.neumann_mask[e_idx]) {
+                continue;
+            }
+
+            for (uz c_loc : { 0uz, 1uz }) {
+                const auto c_idx = edge.cells[c_loc];
+
+                if (c_idx == mesh::no_cell) {
+                    continue;
+                }
+
+                this->rhs[e_idx] +=
+                    prob.c[c_idx] * this->cell_measures[c_idx]
+                    * this->edge_solution[e_idx] / 3.0 / prob.tau;
+            }
+        }
+
+#if 0
+        std::print("mat=[");
+        for (uz i : range(0uz, this->sysmat.get_rows())) {
+            std::print("[");
+            for (uz j : range(0uz, this->sysmat.get_cols())) {
+                std::print("{},", this->sysmat.at(i, j));
+            }
+            std::print("],");
+        }
+        std::println("]");
+        std::println("rhs={}", this->rhs);
+        std::cout.flush();
+#endif
+
+#if 1
+        dxx::assert::always(
+            ::math::gmres::solve(this->sysmat, this->rhs, this->edge_solution, { .tol = this->tol })
+        );
+#else
+        static math::gmres::Options<Real> opt{
+            .max_iters = 35,
+            .verbose = false,
+            .restart = true
+        };
+        opt.tol = this->tol;
+        while(
+            !::math::gmres::solve(this->sysmat, this->rhs, this->edge_solution, opt)
+        ) ;//std::println("{}", this->edge_solution);
+        //std::println("{}", this->edge_solution);
+#endif
+
+        for (auto [ c_idx, cell, pv ] : enumerate(mesh.cells, this->solution)) {
+            pv = this->prev_solution[c_idx] * this->lambda[c_idx];
+
+            for (uz e_loc : range(0uz, 3uz)) {
+                const auto e_idx = cell.edges[e_loc];
+                pv += prob.a[c_idx] * this->edge_solution[e_idx]
+                      / this->l[c_idx];
+            }
+
+            pv /= this->beta[c_idx];
+        }
+
+        this->time += prob.tau;
+    } // <-- void step()
+
+    [[nodiscard]]
+    inline constexpr
+    const auto& get_solution() const { return this->solution; }
+
+    [[nodiscard]]
+    inline constexpr
+    Real get_time() const { return this->time; }
+
+    [[nodiscard]]
+    inline constexpr
+    const auto& get_prob() const { return this->problem; }
+
+private:
+    inline constexpr
+    void prepare() {
+        const auto& prob = this->problem;
+        const auto& mesh = prob.mesh;
+
+        for (auto [ e_idx, e_sol ] : enumerate(this->edge_solution)) {
+            if (this->problem.dirichlet_mask[e_idx]) {
+                e_sol = this->problem.dirichlet[e_idx];
+            }
+        }
+
+        // Fill cell-wise cached values
+        for (
+            auto [
+                c_idx, cell, c_mes, c_lambda, c_alpha_i, c_alpha, c_beta, c_l
+            ] : enumerate(
+                mesh.cells,
+                this->cell_measures,
+                this->l,
+                this->alpha_i,
+                this->alpha,
+                this->beta,
+                this->l
+            )
+        ) {
+            c_mes = mesh.cell_measure(c_idx);
+
+            c_l = {};
+            for (const auto& e_idx : cell.edges) {
+                const auto& edge = mesh.edges[e_idx];
+                const auto p1 = mesh.points[edge.points[0]];
+                const auto p2 = mesh.points[edge.points[1]];
+
+                const std::array d{ p1[0] - p2[0], p1[1] - p2[1], };
+                c_l += math::norm::sq_euclidean(d);
+            }
+            c_l /= 48.0 * this->cell_measures[c_idx];
+
+            c_lambda = prob.c[c_idx] * c_mes / prob.tau;
+            c_alpha_i = 1.0 / c_l;
+            c_alpha   = 3 * c_alpha_i;
+            c_beta    = c_lambda + prob.a[c_idx] * c_alpha;
+        }
+
+        const auto edge_dirs = std::views::transform(
+            range(0uz, mesh.edges.size()),
+            [&mesh] (auto e_idx) { return mesh.get_edge_dir(e_idx); }
+        ) | std::ranges::to<std::vector<typename Problem::Mesh::Point>>();
+
+        for (auto [ c_idx, cell ] : enumerate(mesh.cells)) {
+            /*
+             * B^{-1} constains edge vector's dot products
+             * For the calculations to be correct, we need them to be oriented
+             * correctly
+             */
+            for (uz i : range(0uz, 3uz)) {
+                const auto ei = cell.edges[i];
+                for (uz j : range(0uz, 3uz)) {
+                    const auto ej = cell.edges[j];
+                    const auto neg = mesh.is_edge_clockwise(ei, c_idx)
+                                     != mesh.is_edge_clockwise(ej, c_idx);
+                    const int sign = (1 - 2 * neg);
+                    const auto dp = ::math::dot(edge_dirs[ei], edge_dirs[ej]);
+                    this->b_inv()[c_idx, i, j] =
+                        sign * dp / this->cell_measures[c_idx]
+                        + 1.0 / this->l[c_idx] / 3.0;
+                }
+            }
+        }
+
+        this->sysmat.reset();
+
+        for (auto [ e_idx, edge ] : enumerate(mesh.edges)) {
+            this->sysmat.push(e_idx, e_idx, prob.dirichlet_mask[e_idx]);
+
+            if (prob.dirichlet_mask[e_idx] && !prob.neumann_mask[e_idx]) {
+                continue;
+            }
+
+            for (uz c_loc : { 0, 1 }) {
+                const uz c_idx = edge.cells[c_loc];
+                if (c_idx == mesh::no_cell) {
+                    continue;
+                }
+                this->add_sysmat_term(e_idx, c_idx);
+            }
+        }
+    } // <-- void prepare()
+
+    inline constexpr
+    void add_sysmat_term(uz e_idx, uz c_idx) {
+        const auto& prob = this->problem;
+        const auto& mesh = prob.mesh;
+        const auto& cell = mesh.cells[c_idx];
+
+        const uz e_loc = std::distance(
+            cell.edges.cbegin(), std::ranges::find(cell.edges, e_idx)
+        );
+
+        for (uz e1_loc : range(0uz, 3uz)) {
+            const uz e1_idx = cell.edges[e1_loc];
+            this->sysmat[e_idx, e1_idx] +=
+                prob.a[c_idx] * (
+                    this->b_inv()[c_idx, e1_loc, e_loc]
+                    - (
+                        this->alpha_i[c_idx] * this->alpha_i[c_idx]
+                        / this->alpha[c_idx]
+                    )
+                ) + (e1_loc == e_loc) * (
+                    prob.c[c_idx] * this->cell_measures[c_idx]
+                    / 3.0 / prob.tau
+                );
+        }
+    } // <-- LMHFE::add_sysmat_term(e_idx, c_idx)
+
+    auto b_inv(this auto& self) {
+        return std::mdspan{
+            self.b_inv_data.data(),
+            self.problem.cells, 3, 3,
+        };
+    } // <-- LMHFE::b_inv(self)
+
+    const Problem problem;
+    Real tol;
+
+    Real time;
+
+    std::vector<Real> solution;
+    std::vector<Real> prev_solution;
+
+    std::vector<Real> edge_solution;
+
+    // std::vector<uz> capacities;
+
+    std::vector<int> is_boundary;
+
+    std::vector<Real> cell_measures;
+
+    std::vector<Real> lambda;
+    std::vector<Real> alpha_i;
+    std::vector<Real> alpha;
+    std::vector<Real> beta;
+    std::vector<Real> l;
+
+    math::CSR<Real> sysmat;
+    std::vector<Real> rhs;
+
+    std::vector<Real> b_inv_data; // Dense 3D
+
+    template <typename, typename, typename> friend class FwdDiff;
+}; // <-- class LMHFE<TReal>
+
+} // <-- namespace mhfe

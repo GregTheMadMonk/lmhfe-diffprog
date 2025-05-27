@@ -1,0 +1,93 @@
+export module math:matvec;
+
+import dxx.assert;
+import std;
+
+import :csr;
+import :dot;
+import :traits;
+
+namespace math {
+
+export
+template <vector M, vector_like<M> V, mut_vector_like<M> O>
+inline constexpr
+void matvec(M&& m, V&& v, O&& o, RealOf<M> alpha = 1) {
+    const auto rows = o.size();
+    const auto cols = v.size();
+
+    dxx::assert::debug(m.size() == rows * cols);
+
+    // Assume row-major input
+    for (auto row : range(0uz, rows)) {
+        const std::span mat_row{ m.data() + cols * row, cols };
+        o[row] += alpha * dot(mat_row, v);
+    }
+} // <-- void matvec(m, v, o)
+
+export
+template <typename Out = void, vector M, vector_like<M> V>
+requires (mut_vector_like<Out, M> || std::same_as<Out, void>)
+[[nodiscard]]
+inline constexpr
+auto matvec(M&& m, V&& v, RealOf<M> alpha = 1) {
+    using Ret = std::conditional_t<
+        std::same_as<Out, void>,
+        std::vector<RealOf<M>>,
+        Out
+    >;
+
+    dxx::assert::debug(m.size() % v.size() == 0);
+
+    Ret ret(m.size() / v.size());
+    matvec(std::forward<M>(m), std::forward<V>(v), ret, alpha);
+    return ret;
+} // <-- matvec(m, v)
+
+// For CSR matrix
+export
+template <typename Real, typename V, typename O>
+requires requires {
+    requires vector<V>;
+    requires mut_vector_like<O, V>;
+    requires std::same_as<RealOf<V>, Real>;
+}
+inline constexpr
+void matvec(const CSR<Real>& m, V&& v, O&& o, RealOf<V> alpha = 1) {
+    const auto rows = o.size();
+    const auto cols = v.size();
+
+    dxx::assert::debug(m.get_rows() == rows);
+    dxx::assert::debug(m.get_cols() == cols);
+
+    for (auto row : range(0uz, rows)) {
+        for (auto [ col, val ] : m.get_row_data(row)) {
+            o[row] += alpha * val * v[col];
+        }
+    }
+} // <-- void matvec(CSR m, v, o)
+
+export
+template <typename Out = void, typename Real, typename V>
+requires requires {
+    requires (mut_vector_for<Out, CSR<Real>> || std::same_as<Out, void>);
+    requires vector<V>;
+    requires std::same_as<RealOf<V>, Real>;
+}
+[[nodiscard]]
+inline constexpr
+auto matvec(const CSR<Real>& m, V&& v, RealOf<V> alpha = 1) {
+    using Ret = std::conditional_t<
+        std::same_as<Out, void>,
+        std::vector<Real>,
+        Out
+    >;
+
+    dxx::assert::debug(m.get_cols() == v.size());
+
+    Ret ret(m.get_rows());
+    matvec(m, std::forward<V>(v), ret, alpha);
+    return ret;
+} // <-- auto matvec(CSR m, v)
+
+} // <-- namespace math

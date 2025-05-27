@@ -1,0 +1,333 @@
+export module mesh;
+
+import dxx.assert;
+import dxx.cstd.fixed;
+import std;
+import utils;
+
+namespace mesh {
+
+export
+inline constexpr uz no_cell = std::numeric_limits<uz>::max();
+
+export
+template <typename TReal>
+class Triangular {
+public:
+    using Real = TReal;
+
+    using Point = std::array<Real, 2>;
+
+    struct Edge {
+        std::array<uz, 2> points;
+        std::array<uz, 2> cells;
+
+        [[nodiscard]]
+        inline constexpr
+        bool is_boundary() const
+        { return this->cells[0] == no_cell || this->cells[1] == no_cell; }
+
+        [[nodiscard]]
+        auto operator<=>(const Edge&) const = default;
+    }; // <-- struct Edge
+
+    struct Cell {
+        std::array<uz, 3> points;
+        std::array<uz, 3> edges;
+
+        [[nodiscard]]
+        auto operator<=>(const Cell&) const = default;
+    }; // <-- struct Cell
+
+    std::vector<Point> points;
+    std::vector<Edge>  edges;
+    std::vector<Cell>  cells;
+
+    [[nodiscard]]
+    inline constexpr
+    bool is_empty() const {
+        return this->points.empty()
+            || this->edges.empty()
+            || this->cells.empty();
+    } // <-- Triangular::is_empty() const
+
+    [[nodiscard]]
+    inline constexpr
+    Real cell_measure(uz cell) const {
+        dxx::assert::debug(cell < this->cells.size());
+
+        const auto& c = this->cells[cell];
+
+        const auto& p0 = this->points[c.points[0]];
+        const auto& p1 = this->points[c.points[1]];
+        const auto& p2 = this->points[c.points[2]];
+
+        const std::array<Point, 2> d{
+            Point{ p1[0] - p0[0], p1[1] - p0[1] },
+            Point{ p2[0] - p0[0], p2[1] - p0[1] },
+        }; // <-- d
+
+        return std::abs(d[0][0] * d[1][1] - d[1][0] * d[0][1]) / 2;
+    } // <-- Triangular::cell_measure(cell) const
+
+    [[nodiscard]]
+    inline constexpr
+    Point cell_center(uz cell) const {
+        dxx::assert::debug(cell < this->cells.size());
+
+        const auto& c = this->cells[cell];
+
+        const auto& p0 = this->points[c.points[0]];
+        const auto& p1 = this->points[c.points[1]];
+        const auto& p2 = this->points[c.points[2]];
+
+        return Point{
+            (p0[0] + p1[0] + p2[0]) / 3,
+            (p0[1] + p1[1] + p2[1]) / 3,
+        };
+    } // <-- Triangular::cell_center(cell) const
+
+    inline constexpr
+    Triangular& direct() {
+        // First cell in the edge - edge is clockwise
+        // Second - edge is counter-clockwise
+        for (auto [ e_idx, edge ] : enumerate(this->edges)) {
+            const auto d   = this->get_edge_dir(e_idx);
+            const auto& p0 = this->points[edge.points[0]];
+
+            const auto e_cells = edge.cells;
+            std::array<uz, 2> sides{ 0, 1 };
+
+            for (auto [ l_idx, c_idx ] : enumerate(edge.cells)) {
+                if (c_idx == no_cell) {
+                    sides[l_idx] = 2;
+                    continue;
+                }
+
+                const auto center = this->cell_center(c_idx);
+
+                const Point cd{ center[0] - p0[0], center[1] - p0[1] };
+
+                const auto cross_z = d[0] * cd[1] - d[1] * cd[0];
+                // cross_z < 0 = clocksize => cross_z >= 0 delivers index 0
+                // for clockwise
+                sides[l_idx] = cross_z >= 0;
+            }
+
+            if (sides[0] == 2) sides[0] = 1 - sides[1];
+            if (sides[1] == 2) sides[1] = 1 - sides[0];
+
+            dxx::assert::debug(sides[0] != sides[1]);
+            dxx::assert::debug(sides[0] < 2);
+            dxx::assert::debug(sides[1] < 2);
+
+            edge.cells = { e_cells[sides[0]], e_cells[sides[1]] };
+        }
+        return *this;
+    } // <-- Triangular::direct()
+
+    [[nodiscard]]
+    inline constexpr
+    Point get_edge_dir(uz edge) const {
+        dxx::assert::debug(edge < this->edges.size());
+        const auto& e = this->edges[edge];
+        const auto& p0 = this->points[e.points[0]];
+        const auto& p1 = this->points[e.points[1]];
+        return Point{ p1[0] - p0[0], p1[1] - p0[1] };
+    } // <-- Triangular::get_edge_dir() const
+
+    [[nodiscard]]
+    inline constexpr
+    bool is_edge_clockwise(uz edge, uz cell) const {
+        dxx::assert::debug(edge < this->edges.size());
+        dxx::assert::debug(cell < this->cells.size());
+        return this->edges[edge].cells[0] == cell;
+    } // <-- Triangular::is_edge_clockwise(edge, cell) const
+
+    [[nodiscard]]
+    inline constexpr
+    bool is_valid() const { return true; /* TODO */ }
+
+    template <typename Output>
+    inline
+    void dump(Output&& output) const {
+        std::println(output, "{}", this->points.size());
+        for (const auto& p : this->points) {
+            std::println(output, "{}", p[0]);
+            std::println(output, "{}", p[1]);
+        }
+        std::println(output, "{}", this->edges.size());
+        for (const auto& e : this->edges) {
+            std::println(output, "{}", e.points[0]);
+            std::println(output, "{}", e.points[1]);
+            for (uz i : { 0, 1 }) {
+                if (e.cells[i] == mesh::no_cell) {
+                    std::println(output, "{}", "none");
+                } else {
+                    std::println(output, "{}", e.cells[i]);
+                }
+            }
+        }
+        std::println(output, "{}", this->cells.size());
+        for (const auto& c : this->cells) {
+            for (uz i : { 0, 1, 2 }) {
+                std::println(output, "{}", c.points[i]);
+            }
+            for (uz i : { 0, 1, 2 }) {
+                std::println(output, "{}", c.edges[i]);
+            }
+        }
+    } // <-- Triangular::dump(output) const
+
+    template <typename Input>
+    inline
+    void read(Input&& input) {
+        this->points.clear();
+        this->edges.clear();
+        this->cells.clear();
+
+        std::string line;
+        enum { None = 0, Points, Edges, Cells } reading = None;
+        uz remaining = 0;
+        const auto next_line = [&line, &input] {
+            dxx::assert::always(
+                static_cast<bool>(std::getline(input, line, '\n'))
+            );
+        }; // <-- next_line
+        while (std::getline(input, line, '\n')) {
+            if (remaining == 0) {
+                remaining = std::stoll(line);
+                reading = static_cast<decltype(reading)>(reading + 1);
+                continue;
+            }
+
+            switch (reading) {
+            case None:
+                dxx::assert::always(false);
+            case Points: {
+                auto& p = this->points.emplace_back();
+                p[0] = std::stod(line);
+                next_line();
+                p[1] = std::stod(line);
+                break;
+            }
+            case Edges: {
+                auto& e = this->edges.emplace_back();
+                e.points[0] = std::stoll(line);
+                next_line();
+                e.points[1] = std::stoll(line);
+                for (uz i : { 0, 1 }) {
+                    next_line();
+                    if (line == "none") {
+                        e.cells[i] = mesh::no_cell;
+                    } else {
+                        e.cells[i] = std::stoll(line);
+                    }
+                }
+                break;
+            }
+            case Cells: {
+                auto& c = this->cells.emplace_back();
+                c.points[0] = std::stoll(line);
+                for (uz i : { 1, 2 }) {
+                    next_line();
+                    c.points[i] = std::stoll(line);
+                }
+                for (uz i : { 0, 1, 2 }) {
+                    next_line();
+                    c.edges[i] = std::stoll(line);
+                }
+                break;
+            }
+            }
+
+            --remaining;
+        }
+    } // <-- Triangular::read(input)
+}; // <-- class Triangular
+
+export
+template <typename Real>
+[[nodiscard]]
+std::optional<Triangular<Real>> gen_rect(uz N_x, uz N_y, Real X, Real Y) {
+    const Real dx  = X / N_x;
+    const Real dy  = Y / N_y;
+
+    using Mesh  = mesh::Triangular<Real>;
+    using Point = Mesh::Point;
+    using Edge  = Mesh::Edge;
+    using Cell  = Mesh::Cell;
+
+    const auto num_points = (N_x + 1) * (N_y + 1);
+    const auto num_edges  = N_x * N_y + N_x * (N_y + 1) + N_y * (N_x + 1);
+    const auto num_cells  = 2 * N_x * N_y;
+
+    // Could use mdspans, but consistent indexing is a requirement!
+    std::vector<Point> points(num_points);
+    std::vector<Cell>  cells(num_cells);
+    for (uz i_x : range(0uz, N_x + 1)) {
+        for (uz i_y : range(0uz, N_y + 1)) {
+            const auto idx = i_x * (N_y + 1) + i_y;
+            points[idx][0] = i_x * dx; 
+            points[idx][1] = i_y * dy; 
+        }
+    }
+
+    std::vector<Edge>  edges;
+    edges.reserve(num_edges);
+
+    const auto push_edge = [&edges] (uz p1, uz p2, uz cell) -> uz {
+        const auto it = std::ranges::find_if(
+            edges, [p1, p2] (const auto& edge) {
+                return (edge.points[0] == p1 && edge.points[1] == p2)
+                    || (edge.points[1] == p1 && edge.points[0] == p2);
+            }
+        ); // <-- it
+
+        if (it != edges.cend()) {
+            it->cells[1] = cell;
+            return std::ranges::distance(edges.cbegin(), it);
+        }
+
+        edges.push_back(
+            Edge{ .points = { p1, p2 }, .cells = { cell, mesh::no_cell } }
+        );
+
+        return edges.size() - 1;
+    }; // <-- push_edge(p1, p2)
+
+    for (uz i_x : range(0uz, N_x)) {
+        for (uz i_y : range(0uz, N_y)) {
+            for (uz u : { 0, 1 }) {
+                const auto idx = 2 * (i_x * N_y + i_y) + u;
+                auto& cell = cells[idx];
+                cell.points[0] = i_x * (N_y + 1) + i_y;
+                cell.points[1] = (i_x + 1) * (N_y + 1) + i_y + 1;
+                cell.points[2] = (i_x + u) * (N_y + 1) + (i_y + 1 - u);
+
+                cell.edges = {
+                    push_edge(cell.points[0], cell.points[1], idx),
+                    push_edge(cell.points[2], cell.points[1], idx),
+                    push_edge(cell.points[0], cell.points[2], idx),
+                };
+            }
+        }
+    }
+
+    if (edges.size() != num_edges) {
+        std::println(
+            std::cerr,
+            "Edges num mismatch: {} != {}",
+            edges.size(), num_edges
+        );
+        return std::nullopt;
+    }
+
+    return Mesh{
+        .points = std::move(points),
+        .edges  = std::move(edges),
+        .cells  = std::move(cells),
+    };
+} // <-- gen_rect(N_x, N_y, X, Y)
+
+} // <-- namespace mesh

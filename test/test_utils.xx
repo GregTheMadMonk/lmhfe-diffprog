@@ -1,0 +1,49 @@
+export module test_utils;
+
+export import dxx.assert;
+export import dxx.cstd.compat;
+export import dxx.cstd.fixed;
+export import dxx.selftest;
+export import math;
+export import mesh;
+export import mhfe;
+export import std;
+export import utils;
+
+export {
+using dxx::selftest::UnitTest;
+
+namespace test { using dxx::selftest::test; }
+
+template <std::ranges::range R, typename... SetArgs>
+bool set_equal(R&& r, const std::set<SetArgs...>& s) {
+    const std::set lhs(std::ranges::begin(r), std::ranges::end(r));
+    return std::ranges::equal(lhs, s);
+} // <-- set_equal(r, s)
+
+template <typename T>
+bool is_close(const T& a, const T& b, T tol = 1e-7) {
+    return (std::abs(a - b) / std::abs(a)) <= tol;
+} // <-- is_close(a, b) (scalars)
+
+template <std::ranges::range R1, std::ranges::range R2>
+bool all_close(
+    R1&& r1,
+    R2&& r2,
+    std::ranges::range_value_t<R1> tol =
+        1000 * std::numeric_limits<std::ranges::range_value_t<R1>>::epsilon()
+) {
+    return std::ranges::all_of(
+        std::views::zip(std::forward<R1>(r1), std::forward<R2>(r2)),
+        [tol] (const auto& pr) {
+            const auto& [ l, r ] = pr;
+            if (!is_close(l, r, tol)) {
+                std::println("{} and {} are not close!", l, r);
+                return false;
+            }
+            return true;
+        }
+    );
+} // <-- is_close(r1, r2)
+
+} // <-- export

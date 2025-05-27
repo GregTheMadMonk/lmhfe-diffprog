@@ -1,0 +1,24 @@
+export module math:dot;
+
+import dxx.assert;
+import dxx.cstd.fixed;
+
+import :traits;
+
+namespace math {
+
+export
+template <vector U, vector_like<U> V>
+[[nodiscard]]
+inline constexpr
+auto dot(U&& u, V&& v) {
+    dxx::assert::debug(u.size() == v.size());
+
+    using Real = RealOf<U>;
+
+    Real ret{};
+    for (auto [ ue, ve ] : std::views::zip(u, v)) ret += ue * ve;
+    return ret;
+} // <-- dot(u, v)
+
+} // <-- namespace math

@@ -1,0 +1,69 @@
+export module mhfe:problem;
+
+import dxx.cstd.fixed;
+import mesh;
+import std;
+import utils;
+
+namespace mhfe {
+
+export
+template <typename TReal>
+struct Problem {
+    using Real = TReal;
+    using Mesh = mesh::Triangular<Real>;
+
+    uz points;
+    uz edges;
+    uz cells;
+
+    // Material properties
+    std::vector<Real> a;
+    std::vector<Real> c;
+
+    // Boundary conditions
+    std::vector<Real> dirichlet;
+    std::vector<int>  dirichlet_mask;
+    std::vector<Real> neumann;
+    std::vector<int>  neumann_mask;
+
+    // Simulation time step
+    Real tau;
+
+    // Simulation mesh
+    Mesh mesh;
+
+    // Validate that all of the data vectors are the right size and that the
+    // data specified in them is enough to make the calculations
+    [[nodiscard]]
+    inline constexpr
+    bool is_valid() const {
+        if (this->mesh.is_empty()) {
+            return false;
+        }
+
+        const bool sz_mismatch =
+            this->points != this->mesh.points.size()
+            || this->edges != this->mesh.edges.size()
+            || this->cells != this->mesh.cells.size();
+
+        if (sz_mismatch) {
+            return false;
+        }
+
+        for (auto [ i, e ] : enumerate(this->mesh.edges)) {
+            static_assert(std::is_reference_v<decltype(e)>);
+            if (!e.is_boundary()) {
+                continue;
+            }
+
+            if (this->dirichlet_mask[i] == 0 && this->neumann_mask[i] == 0) {
+                return false;
+            }
+        }
+
+        return this->tau != 0;
+    } // <-- Problem::is_valid() const
+}; // <-- namespace Problem
+
+} // <-- namespace mhfe

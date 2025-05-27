@@ -1,0 +1,19 @@
+export module utils:prefetch;
+
+import std;
+
+namespace utils {
+
+export
+template <typename T>
+inline
+void prefetch(const std::vector<T>& v) {
+    const T* rod = v.data();
+    const T* rod_end = rod + v.size();
+    while (rod < rod_end) {
+        __builtin_prefetch(rod);
+        rod += 64 / sizeof(T);
+    }
+} // <-- void prefetch(v)
+
+} // <-- namespace utils

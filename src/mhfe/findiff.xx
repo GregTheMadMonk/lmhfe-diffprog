@@ -1,0 +1,57 @@
+export module mhfe:findiff;
+
+import std;
+
+import :lmhfe;
+import :problem;
+
+namespace mhfe {
+
+export
+template <typename TReal>
+class FinDiff {
+public:
+    using Real = TReal;
+
+    inline constexpr
+    explicit FinDiff(const Problem<Real>& prob, Real tol, Real c_da)
+        : da(c_da)
+        , base(prob, tol)
+    {
+        for (uz c_idx : range(0uz, prob.cells)) {
+            auto p1 = prob; // copy
+            p1.a[c_idx] += da;
+            this->diffs.emplace_back(p1, tol);
+        }
+    }
+
+    inline constexpr
+    void step() {
+        this->base.step();
+        for (auto& ds : this->diffs) ds.step();
+    }
+
+    template <typename Func>
+    [[nodiscard]]
+    inline constexpr
+    auto get_sensitivity(const Func& func) const
+    requires requires (const std::vector<Real>& cv) {
+        { func(cv) } -> std::same_as<Real>;
+    } {
+        const Real b = func(base.get_solution());
+
+        std::vector<Real> ret(this->diffs.size());
+        for (auto [ c_idx, r ] : enumerate(ret)) {
+            r = (func(this->diffs[c_idx].get_solution()) - b) / da;
+        }
+
+        return ret;
+    } // <-- FinDiff::sensitivity(func) const
+
+private:
+    Real da;
+    LMHFE<Real> base;
+    std::vector<LMHFE<Real>> diffs;
+}; // <-- class FinDiff<TReal>
+
+} // <-- namespace mhfe

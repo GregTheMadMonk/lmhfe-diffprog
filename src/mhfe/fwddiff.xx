@@ -1,0 +1,228 @@
+export module mhfe:fwddiff;
+
+import math;
+import std;
+
+import :lmhfe;
+import :problem;
+
+namespace mhfe {
+
+export
+template <
+    typename TReal,
+    typename TScalarWrtSol,
+    typename TScalarWrtA>
+class FwdDiff {
+public:
+    using Real = TReal;
+
+    using ScalarWrtSol = TScalarWrtSol;
+    using ScalarWrtA   = TScalarWrtA;
+
+    inline constexpr
+    explicit FwdDiff(
+        const Problem<Real>& prob,
+        Real tol,
+        const ScalarWrtSol& c_f_wrt_sol,
+        const ScalarWrtA&   c_f_wrt_a
+    )   : f_wrt_sol(c_f_wrt_sol)
+        , f_wrt_a(c_f_wrt_a)
+        , base(prob, tol)
+        , result(prob.cells)
+        , edge_buffer(prob.edges)
+        , g_wrt_x(prob.cells)
+        , rhs_wrt_edge_sol(prob.edges)
+        , sysmat_wrt_a(prob.edges, math::CSR<Real>(prob.edges, prob.edges))
+        , rhs(prob.edges * prob.edges)
+        , edge_sol_wrt_a_data(prob.edges * prob.edges, 0)
+        , sol_wrt_a_data(prob.cells * prob.cells, 0)
+    { this->prepare(); }
+
+    inline constexpr
+    void step() {
+        const auto& prob = this->base.get_prob();
+        const auto& mesh = prob.mesh;
+
+        this->base.step();
+
+        for (auto [ c_idx, cell ] : enumerate(mesh.cells)) {
+            const std::span c_rhs{
+                this->rhs.data() + c_idx * mesh.edges.size(), mesh.edges.size()
+            }; // <-- c_rhs
+
+            math::matvec(
+                this->sysmat_wrt_a[c_idx],
+                this->base.edge_solution,
+                c_rhs
+            );
+
+            for (auto [ e_idx, e_rhs ] : enumerate(c_rhs)) {
+                if (prob.dirichlet_mask[e_idx]) {
+                    e_rhs = 0;
+                    continue;
+                }
+
+                e_rhs = -e_rhs + (
+                    this->rhs_wrt_edge_sol[e_idx]
+                    * this->edge_sol_wrt_a()[c_idx, e_idx]
+                );
+            }
+
+            constexpr auto eps = std::numeric_limits<Real>::epsilon();
+            if (math::norm::euclidean(c_rhs) <= eps) {
+                std::ranges::fill(c_rhs, Real{});
+                std::ranges::fill(this->edge_sol_wrt_a(c_idx), Real{});
+            } else {
+                dxx::assert::always(
+                    math::gmres::solve(
+                        this->base.sysmat, c_rhs, this->edge_sol_wrt_a(c_idx),
+                        { .tol = this->base.tol * 10 }
+                    )
+                );
+            }
+        }
+
+        for (uz c1_idx : range(0uz, mesh.cells.size())) {
+            for (auto [ c2_idx, cell2 ] : enumerate(mesh.cells)) {
+                auto& v = this->sol_wrt_a()[c1_idx, c2_idx];
+
+                // V * p_wrt_a
+                v *= this->base.lambda[c2_idx] / this->base.beta[c2_idx];
+
+                // + V_wrt_a * p
+                if (c1_idx == c2_idx) {
+                    v -=
+                        this->base.prev_solution[c2_idx]
+                        * this->base.lambda[c2_idx]
+                        * this->base.alpha[c2_idx]
+                        / this->base.beta[c2_idx]
+                        / this->base.beta[c2_idx];
+                }
+
+                for (uz e_loc : { 0, 1, 2 }) {
+                    const auto e_idx = cell2.edges[e_loc];
+
+                    // U * tp_wrt_a
+                    v += prob.a[c2_idx]
+                         * this->edge_sol_wrt_a()[c1_idx, e_idx]
+                         * this->base.alpha[c2_idx]
+                         / this->base.beta[c2_idx];
+
+                    // + U_wrt_a * tp
+                    if (c1_idx == c2_idx) {
+                        v +=
+                            this->base.edge_solution[e_idx]
+                            * this->base.alpha_i[c2_idx]
+                            * this->base.lambda[c2_idx]
+                            / this->base.beta[c2_idx]
+                            / this->base.beta[c2_idx];
+                    }
+                }
+            }
+        }
+
+        this->f_wrt_sol(this->base.solution, this->g_wrt_x);
+        math::matvec(this->sol_wrt_a_data, this->g_wrt_x, this->result);
+        this->f_wrt_a(this->g_wrt_x);
+
+        for (auto [ c_idx, c_res ] : enumerate(this->result)) {
+            c_res += this->g_wrt_x[c_idx];
+        }
+    } // <-- FwdDiff::step()
+
+    [[nodiscard]]
+    const auto& get_sensitivity() const { return this->result; }
+
+private:
+    inline constexpr
+    void prepare() {
+        const auto& prob = this->base.get_prob();
+        const auto& mesh = prob.mesh;
+
+        for (auto [ c_idx, cell ] : enumerate(mesh.cells)) {
+            for (uz e1_loc : { 0, 1, 2 }) {
+                const uz e1_idx = cell.edges[e1_loc];
+                if (prob.dirichlet_mask[e1_idx]) {
+                    continue;
+                }
+
+                for (uz e2_loc : { 0, 1, 2 }) {
+                    const auto e2_idx = cell.edges[e2_loc];
+
+                    this->sysmat_wrt_a[c_idx][e1_idx, e2_idx] +=
+                        this->base.b_inv()[c_idx, e1_loc, e2_loc] - (
+                            this->base.alpha_i[c_idx]
+                            * this->base.alpha_i[c_idx]
+                            / this->base.alpha[c_idx]
+                        );
+                }
+            }
+        }
+
+        for (auto [ e_idx, rwes ] : enumerate(this->rhs_wrt_edge_sol)) {
+            rwes = 0;
+            if (prob.dirichlet_mask[e_idx] && !prob.neumann_mask[e_idx]) {
+                continue;
+            }
+
+            const auto& edge = mesh.edges[e_idx];
+            for (uz c_loc : { 0, 1 }) {
+                const uz c_idx = edge.cells[c_loc];
+                if (c_idx == mesh::no_cell) {
+                    continue;
+                }
+
+                rwes += this->base.cell_measures[c_idx] * prob.c[c_idx];
+            }
+            rwes /= 3 * prob.tau;
+        }
+    } // <-- FwdDiff::prepare()
+
+    [[nodiscard]]
+    inline constexpr
+    auto edge_sol_wrt_a(this auto& self) {
+        return std::mdspan{
+            self.edge_sol_wrt_a_data.data(),
+            self.base.get_prob().edges,
+            self.base.get_prob().edges,
+        };
+    } // <-- FwdDiff::edge_sol_wrt_a(this self)
+
+    [[nodiscard]]
+    inline constexpr
+    auto edge_sol_wrt_a(this auto& self, uz row) {
+        return std::span{
+            self.edge_sol_wrt_a_data.data() + row * self.base.get_prob().edges,
+            self.base.get_prob().edges,
+        };
+    } // <-- FwdDiff::edge_sol_wrt_a(this self)
+
+    [[nodiscard]]
+    inline constexpr
+    auto sol_wrt_a(this auto& self) {
+        return std::mdspan{
+            self.sol_wrt_a_data.data(),
+            self.base.get_prob().cells,
+            self.base.get_prob().cells,
+        };
+    } // <-- FwdDiff::sol_wrt_a(this self)
+
+    ScalarWrtSol f_wrt_sol;
+    ScalarWrtA   f_wrt_a;
+
+    LMHFE<Real> base;
+
+    std::vector<Real> result;
+
+    std::vector<Real> edge_buffer;
+    std::vector<Real> g_wrt_x;
+
+    std::vector<Real> rhs_wrt_edge_sol;
+    std::vector<math::CSR<Real>> sysmat_wrt_a;
+    std::vector<Real> rhs;
+    std::vector<Real> edge_sol_wrt_a_data;
+    std::vector<Real> sol_wrt_a_data;
+}; // <-- class FwdDiff<TReal>
+
+} // <-- namespace mhfe

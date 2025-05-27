@@ -1,0 +1,87 @@
+export module math:traits;
+
+import dxx.cstd.fixed;
+import std;
+import utils;
+
+import :csr;
+
+namespace math {
+
+export
+template <typename T>
+concept vector = requires (T t, const T ct) {
+    { t.size()  } -> std::convertible_to<uz>;
+    { ct.size() } -> std::convertible_to<uz>;
+    { t.data()  } -> utils::pointer;
+    { ct.data() } -> utils::pointer;
+}; // <-- concept vector<T>
+static_assert( vector<std::vector<f32>>);
+static_assert( vector<std::span<f32>>);
+static_assert(!vector<std::set<f32>>);
+
+export
+template <typename T>
+concept mut_vector = requires (T t) {
+    requires vector<T>;
+    { t.data() } -> utils::mut;
+}; // <-- concept mut_vector<T>
+static_assert( mut_vector<std::vector<f32>>);
+static_assert( mut_vector<std::span<f32>>);
+static_assert(!mut_vector<const std::vector<f32>>);
+static_assert( mut_vector<const std::span<f32>>);
+static_assert(!mut_vector<const std::span<const f32>>);
+static_assert(!mut_vector<std::span<const f32>>);
+
+// Matrix is either a vector or a CSR matrix
+export
+template <typename T>
+concept matrix = vector<T> || utils::is_a<T, CSR>;
+
+namespace detail {
+
+template <typename T> struct RealOf;
+
+template <vector T> struct RealOf<T> {
+    using Type = std::remove_cv_t<
+        std::remove_pointer_t<decltype(std::declval<T>().data())>
+    >;
+}; // <-- struct RealOf<vector T>
+
+template <utils::is_a<CSR> T> struct RealOf<T> {
+    using Type = std::remove_cvref_t<T>::Real;
+}; // <-- struct RealOf<CSR T>
+
+} // <-- namespace detail
+
+export
+template <typename T>
+using RealOf = detail::RealOf<T>::Type;
+
+export
+template <typename T, typename V>
+concept vector_like = vector<T>
+                    && vector<V>
+                    && std::same_as<RealOf<T>, RealOf<V>>;
+static_assert( vector_like<std::span<f32>, std::vector<f32>>);
+static_assert( vector_like<std::span<const f32>, std::vector<f32>>);
+static_assert(!vector_like<std::span<i32>, std::vector<f32>>);
+
+export
+template <typename T, typename V>
+concept mut_vector_like = vector_like<T, V> && mut_vector<T>;
+static_assert( mut_vector_like<std::span<f32>, std::vector<f32>>);
+static_assert(!mut_vector_like<std::span<const f32>, std::vector<f32>>);
+static_assert(!mut_vector_like<std::span<i32>, std::vector<f32>>);
+
+export
+template <typename V, typename M>
+concept vector_for = vector<V>
+                   && matrix<M>
+                   && std::same_as<RealOf<V>, RealOf<M>>;
+
+export
+template <typename V, typename M>
+concept mut_vector_for = vector_for<V, M> && mut_vector<V>;
+
+} // <-- namespace math

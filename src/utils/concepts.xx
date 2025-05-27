@@ -1,0 +1,39 @@
+export module utils:concepts;
+
+import std;
+
+namespace utils {
+
+export
+template <typename T>
+concept pointer = std::is_pointer_v<T>;
+
+export
+template <typename T>
+concept reference = std::is_reference_v<T>;
+
+export
+template <typename T>
+concept constant = (
+    [] {
+        if constexpr (pointer<T>) {
+            return std::is_const_v<std::remove_pointer_t<T>>;
+        } else if constexpr (reference<T>) {
+            return std::is_const_v<std::remove_reference_t<T>>;
+        } else {
+            return std::is_const_v<T>;
+        }
+    } ()
+); // <-- concept constant<T>
+
+export
+template <typename T>
+concept mut = !constant<T>;
+
+export
+template <typename T, template <typename...> class Template>
+concept is_a = requires (T t) {
+    { [] <typename... Args> (const Template<Args...>&) {} (t) };
+}; // <-- concept is_a<T>
+
+} // <-- namespace utils

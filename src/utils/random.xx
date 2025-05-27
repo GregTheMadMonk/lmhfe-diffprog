@@ -1,0 +1,110 @@
+export module utils:random;
+
+import std;
+
+namespace utils::random {
+
+namespace generators {
+
+template <std::movable T>
+struct Generator : std::ranges::view_interface<Generator<T>> {
+    struct promise_type {
+        Generator<T> get_return_object() {
+            return Generator{ Handle::from_promise(*this) };
+        } // <-- Generator<T> get_return_object()
+
+        static std::suspend_always initial_suspend() noexcept { return {}; }
+        static std::suspend_always   final_suspend() noexcept { return {}; }
+
+        std::suspend_always yield_value(T value) noexcept {
+            this->current_value = std::move(value);
+            return {};
+        } // <-- std::suspend_always yield_value(value)
+
+        // Disallow co_await
+        void await_transform() = delete;
+
+        [[noreturn]] static void unhandled_exception() { throw; }
+
+        std::optional<T> current_value;
+    }; // <-- struct promise_type
+
+    using Handle = std::coroutine_handle<promise_type>;
+
+    explicit Generator(const Handle& cor) : coroutine(cor) {}
+
+    Generator() = default;
+
+    ~Generator() { if (this->coroutine) this->coroutine.destroy(); }
+
+    Generator(const Generator&) = delete;
+
+    Generator& operator=(Generator& other) noexcept
+    { std::swap(this->coroutine, other.coroutine); return *this; }
+
+    Generator(Generator&& other) noexcept
+        : coroutine(other.coroutine)
+    { other.coroutine = {}; }
+    Generator& operator=(Generator&& other) noexcept {
+        if (this != &other) {
+            if (this->coroutine) this->coroutine.destroy();
+            this->coroutine = other.coroutine;
+            other.coroutine = {};
+        }
+        return *this;
+    }
+
+    class Iterator {
+    public:
+        using value_type      = T;
+        using difference_type = std::ptrdiff_t;
+
+        Iterator& operator++() { this->coroutine.resume(); return *this; }
+        void  operator++(int) { this->coroutine.resume(); }
+
+        T operator*() const {
+            // FIXME: Check .has_value()?
+            return *this->coroutine.promise().current_value;
+        } // <-- const T& operator*() const
+
+        inline constexpr bool operator==(const Iterator&) const
+        { return false; }
+        inline constexpr bool operator==(std::default_sentinel_t) const
+        { return !this->coroutine || this->coroutine.done(); }
+
+        explicit Iterator(const Handle& cor) : coroutine(cor) {}
+
+    private:
+        Handle coroutine;
+    }; // <-- class Iterator
+
+    static_assert(std::input_or_output_iterator<Iterator>);
+
+    Iterator begin() {
+        if (this->coroutine) this->coroutine.resume();
+        return Iterator{ this->coroutine };
+    } // <-- Iterator begin()
+
+    std::default_sentinel_t end() const { return {}; }
+
+private:
+    Handle coroutine;
+}; // <-- struct Generator<T>
+
+static_assert(std::ranges::range<Generator<float>>);
+static_assert(std::ranges::view<Generator<float>>);
+static_assert(std::ranges::viewable_range<Generator<float>>);
+
+export
+template <typename Real>
+[[nodiscard]]
+Generator<Real> normal(Real mean = 1, Real std = 1) {
+    std::random_device rd{};
+    std::mt19937 gen{rd()};
+    std::normal_distribution dist{ mean, std };
+    while (true) co_yield dist(gen);
+} // <-- auto normal<Real>()
+
+} // <-- namespace generators
+
+} // <-- namespace utils::random

@@ -1,0 +1,198 @@
+export module math:gmres;
+
+import dxx.cstd.fixed;
+import std;
+import utils;
+
+import :dot;
+import :matvec;
+import :norm;
+import :traits;
+
+namespace math::gmres {
+
+export
+template <typename Real>
+struct Options {
+    uz   max_iters = 100;
+    Real tol       = 1e-7;
+    bool verbose   = false;
+    bool restart   = false;
+}; // <-- struct Options
+
+export
+template <matrix M, vector_for<M> V, mut_vector_for<M> O>
+inline constexpr
+bool solve(const M& m, const V& v, O&& o, const Options<RealOf<V>>& opt = {}) {
+    // solve m @ v = o
+    const auto rows = v.size();
+    const auto cols = o.size();
+
+    if constexpr (requires { m.prefetch(); }) {
+        m.prefetch();
+    } else if constexpr (requires { utils::prefetch(m); }) {
+        utils::prefetch(m);
+    }
+
+    if constexpr (utils::is_a<std::remove_cvref_t<M>, CSR>) {
+        dxx::assert::debug(rows == m.get_rows());
+        dxx::assert::debug(cols == m.get_cols());
+    } else {
+        dxx::assert::debug(rows * cols == m.size());
+    }
+
+    using Real = RealOf<M>;
+
+    static constexpr Real zero{};
+    static constexpr Real one{1};
+
+    // Residual
+    std::vector<Real> r(rows);
+    std::ranges::copy(v, r.begin());
+    matvec(m, o, r, -one);
+
+    const auto b_norm = norm::euclidean(v);
+
+    std::vector<Real> sn(opt.max_iters, zero);
+    std::vector<Real> cs(opt.max_iters, zero);
+
+    std::vector<Real> e1(opt.max_iters + 1, zero);
+    e1[0] = one;
+
+    const auto r_norm = norm::euclidean(r);
+
+    std::vector<Real> e(opt.max_iters + 1, zero);
+    e[0] = r_norm / b_norm;
+
+    std::vector<Real> Q(rows * (opt.max_iters + 1));
+    // for (auto [ i, q ] : std::views::enumerate(Q)) {
+    for (auto [ i, q ] : std::views::zip(range(0uz, rows), Q)) {
+        q = r[i] / r_norm;
+    }
+
+    std::vector<Real> beta(e1.size(), zero);
+    beta[0] = r_norm;
+
+    std::vector<Real> H((opt.max_iters + 1) * opt.max_iters);
+    const std::mdspan Hs{ H.data(), opt.max_iters, opt.max_iters + 1 };
+
+    const auto arnoldi = [rows, max_iters=opt.max_iters, &Q, &H, &m] (uz k) {
+        // Q(:, k+1)
+        const std::span q   { Q.data() + rows * (k + 1), rows };
+
+        const std::span q_in{ Q.data() + rows * k,       rows };
+
+        // H(1:k+1, K)
+        const std::span h{ H.data() + (max_iters + 1) * k, max_iters + 1 };
+
+        matvec(m, q_in, q);
+
+        for (auto i : range(0uz, k + 1)) {
+            const std::span q_i{ Q.data() + rows * i, rows };
+            h[i] = dot(q, q_i);
+            for (auto j : range(0uz, rows)) {
+                q[j] -= h[i] * q_i[j];
+            }
+        }
+
+        h[k + 1] = norm::euclidean(q);
+        for (auto i : range(0uz, rows)) {
+            q[i] /= h[k + 1];
+        }
+    }; // <-- arnoldi(k)
+
+    const auto apply_givens_rotation =
+        [max_iters=opt.max_iters, &H, &cs, &sn] (uz k) {
+            const std::span h{ H.data() + (max_iters + 1) * k, max_iters + 1 };
+
+            for (auto i : range(0uz, k)) {
+                const auto temp =  cs[i] * h[i] + sn[i] * h[i + 1];
+                h[i + 1]        = -sn[i] * h[i] + cs[i] * h[i + 1];
+                h[i]            = temp;
+            }
+
+            // givens_rotation()
+            const auto t = std::sqrt(h[k] * h[k] + h[k + 1] * h[k + 1]);
+            cs[k] = h[k] / t;
+            sn[k] = h[k + 1] / t;
+
+            h[k]     = cs[k] * h[k] + sn[k] * h[k + 1];
+            h[k + 1] = zero;
+        }; // <-- apply_givens_rotation(k)
+
+    uz k;
+    for (k = 0; k < opt.max_iters; ++k) {
+        arnoldi(k);
+        apply_givens_rotation(k);
+        beta[k + 1] = -sn[k] * beta[k];
+        beta[k]     =  cs[k] * beta[k];
+
+        e[k + 1] = std::abs(beta[k +1]) / b_norm;
+        if (opt.verbose) {
+            std::println("error={}", e[k+1]);
+        }
+        if (e[k + 1] <= opt.tol) break;
+        if ((k == opt.max_iters - 1) && opt.restart) break;
+    }
+
+    if (k == opt.max_iters) {
+        return false; // Failure
+    }
+
+    std::vector<Real> y(k + 1, zero);
+    for (auto i = 0uz; i < k + 1; ++i) {
+        const auto I = k - i;
+        Real lhs = zero;
+        for (auto j : range(0uz, i)) {
+            const auto J = k - j;
+            lhs += y[J] * Hs[J, I];
+        }
+        y[I] = (beta[I] - lhs) / Hs[I, I];
+    }
+
+    for (auto i : range(0uz, rows)) {
+        for (auto j : range(0uz, k + 1)) {
+            o[i] += Q[i + j * rows] * y[j];
+        }
+    }
+
+    return !opt.restart || (k != opt.max_iters - 1);
+} // <-- solve(m, v, o, opt)
+
+export
+template <
+    typename Out = void,
+    typename M,
+    typename V
+>
+requires requires {
+    requires (mut_vector_for<Out, M> || std::same_as<Out, void>);
+    requires matrix<M>;
+    requires vector_for<V, M>;
+}
+[[nodiscard]]
+inline constexpr
+auto solve(const M& m, const V& v, const Options<RealOf<V>>& opt = {}) {
+    using Ret = std::conditional_t<
+        std::same_as<Out, void>,
+        std::vector<RealOf<M>>,
+        Out
+    >;
+
+    const auto rows = [&m] ([[maybe_unused]] const auto& v) {
+        if constexpr (utils::is_a<std::remove_cvref_t<M>, CSR>) {
+            return m.get_rows();
+        } else {
+            return m.size() / v.size();
+        }
+    } (v); // <-- rows
+
+    Ret ret(rows, 0);
+    if (!solve(m, v, ret, opt)) {
+        // TODO: Custom error type
+        throw std::runtime_error{ "GMRES did not converge!" };
+    }
+    return ret;
+} // <-- solve(m, v, opt)
+
+} // <-- namespace math::gmres

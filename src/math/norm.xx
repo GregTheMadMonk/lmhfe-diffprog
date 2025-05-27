@@ -1,0 +1,35 @@
+export module math:norm;
+
+import :dot;
+import :traits;
+
+namespace math::norm {
+
+export
+template <vector V>
+auto sq_euclidean(const V& v) { return dot(v, v); }
+
+export
+template <vector V>
+auto euclidean(V&& v) { return std::sqrt(sq_euclidean(std::forward<V>(v))); }
+
+} // <-- namespace math::norm
+
+namespace math::dist {
+
+export
+template <vector V, vector_like<V> U>
+auto sq_euclidean(const V& v, const U& u) {
+    std::vector<RealOf<V>> d(v.size());
+    std::ranges::copy(v, d.begin());
+    for (auto [ de, ue ] : std::views::zip(d, u)) {
+        de -= ue;
+    }
+    return norm::sq_euclidean(d);
+} // <-- sq_euclidean(v, u)
+
+export
+template <vector V, vector_like<V> U>
+auto euclidean(const V& v, const U& u) { return std::sqrt(sq_euclidean(v, u)); }
+
+} // <-- namespace math::dist

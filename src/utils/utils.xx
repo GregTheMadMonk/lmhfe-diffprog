@@ -1,0 +1,14 @@
+export module utils;
+
+export import :concepts;
+export import :prefetch;
+export import :random;
+
+import std;
+
+export constexpr auto& range = std::views::iota;
+// Poor man's enumerate
+export
+inline constexpr
+auto enumerate(auto&&... r)
+{ return std::views::zip(range(0uz), std::forward<decltype(r)>(r)...); }

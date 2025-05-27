@@ -1,0 +1,170 @@
+export module math:csr;
+
+import dxx.assert;
+import dxx.cstd.fixed;
+import std;
+import utils;
+
+namespace math {
+
+export
+template <typename TReal>
+class CSR {
+public:
+    using Real = TReal;
+
+    explicit
+    inline constexpr
+    CSR(uz c_rows, uz c_cols)
+        : rows(c_rows)
+        , cols(c_cols)
+        , row_offsets(c_rows, 0uz)
+        , col_indices{}
+        , data{}
+    {}
+
+    inline constexpr
+    Real& push(uz row, uz col, const Real& value) {
+        dxx::assert::debug(row < this->rows);
+        dxx::assert::debug(col < this->cols);
+
+        if (auto* ptr = this->find(row, col); ptr != nullptr) {
+            return (*ptr = value);
+        }
+
+        // 1 element is added to row `row`
+        // add 1 to all row offsets after row
+        for (auto r : range(row + 1, this->rows)) {
+            ++this->row_offsets[r];
+        }
+
+        if (this->data.empty()) {
+            // First element to be inserted
+            this->data.push_back(value);
+            this->col_indices.push_back(col);
+            return *this->data.begin();
+        }
+
+        // Append the new value to the beginning of the row
+        const auto offset = this->row_offsets[row];
+
+        const auto ret = this->data.insert(
+            std::next(this->data.begin(), offset),
+            value
+        );
+        this->col_indices.insert(
+            std::next(this->col_indices.begin(), offset),
+            col
+        );
+
+        dxx::assert::debug((*this)[row, col] == value);
+
+        return *ret;
+    } // <-- CSR::push(row, col, value)
+
+    [[nodiscard]]
+    inline constexpr
+    Real& operator[](uz row, uz col) {
+        if (auto* ret = this->find(row, col); ret != nullptr) {
+            return *ret;
+        }
+        return this->push(row, col, Real{});
+    } // <-- CSR::operator[](row, col)
+
+    [[nodiscard]]
+    inline constexpr
+    Real operator[](uz row, uz col) const { return this->at(row, col); }
+
+    [[nodiscard]]
+    inline constexpr
+    Real at(uz row, uz col) const {
+        if (auto* ret = this->find(row, col); ret != nullptr) {
+            return *ret;
+        }
+        return Real{};
+    } // <-- CSR::operator[](row, col) const
+
+    [[nodiscard]]
+    inline constexpr
+    auto* find(this auto& self, uz row, uz col) {
+        dxx::assert::debug(row < self.rows);
+        dxx::assert::debug(col < self.cols);
+
+        const auto start = self.get_row_index(row);
+        const auto end   = self.get_row_index(row + 1);
+
+        dxx::assert::debug(end >= start);
+        dxx::assert::debug(end <= self.col_indices.size());
+
+        for (auto idx = start; idx < end; ++idx) {
+            if (self.col_indices[idx] == col) {
+                return &self.data[idx];
+            }
+        }
+
+        return static_cast<decltype(self.data.data())>(nullptr);
+    } // <-- CSR::find(row, col)
+
+    inline constexpr
+    void reserve(uz elements) {
+        this->data.reserve(elements);
+        this->col_indices.reserve(elements);
+    } // <-- void reserve(elements)
+
+    inline constexpr
+    void reset() {
+        this->row_offsets = std::vector<uz>(this->rows, 0uz);
+        this->col_indices.clear();
+        this->data.clear();
+    } // <-- CSR::reset()
+
+    [[nodiscard]]
+    inline constexpr uz get_rows() const { return this->rows; }
+    [[nodiscard]]
+    inline constexpr uz get_cols() const { return this->cols; }
+
+    [[nodiscard]]
+    inline constexpr
+    auto get_row(uz row) const {
+        dxx::assert::debug(row < this->rows);
+        const auto index = this->get_row_index(row);
+        return std::span{
+            &this->col_indices[index],
+            this->get_row_index(row + 1) - index
+        };
+    } // <-- CSR::get_row(row) const
+
+    [[nodiscard]]
+    inline constexpr
+    auto get_row_data(uz row) const {
+        dxx::assert::debug(row < this->rows);
+        const auto index = this->get_row_index(row);
+        const auto len   = this->get_row_index(row + 1) - index;
+        return std::views::zip(
+            std::span{ &this->col_indices[index], len },
+            std::span{ &this->data[index],        len }
+        );
+    } // <-- CSR::get_row_data(row) const
+
+    inline void prefetch() const {
+        utils::prefetch(this->row_offsets);
+        utils::prefetch(this->col_indices);
+        utils::prefetch(this->data);
+    } // <-- CSR::prefetch() const
+private:
+    [[nodiscard]]
+    uz get_row_index(uz row) const {
+        return (row == this->rows)
+               ? this->col_indices.size()
+               : this->row_offsets[row];
+    } // <-- CSR::get_row_index(row) const
+
+    uz rows;
+    uz cols;
+
+    std::vector<uz> row_offsets;
+    std::vector<uz> col_indices;
+    std::vector<Real> data;
+}; // <-- class CSR<TReal>
+
+} // <-- namespace math
