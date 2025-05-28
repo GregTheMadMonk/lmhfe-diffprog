@@ -90,14 +90,14 @@ bool solve(const M& m, const V& v, O&& o, const Options<RealOf<V>>& opt = {}) {
         for (auto i : range(0uz, k + 1)) {
             const std::span q_i{ Q.data() + rows * i, rows };
             h[i] = dot(q, q_i);
-            for (auto j : range(0uz, rows)) {
-                q[j] -= h[i] * q_i[j];
+            for (auto [ qj, q_ij ] : std::views::zip(q, q_i)) {
+                qj -= h[i] * q_ij;
             }
         }
 
         h[k + 1] = norm::euclidean(q);
-        for (auto i : range(0uz, rows)) {
-            q[i] /= h[k + 1];
+        for (auto& qi : q) {
+            qi /= h[k + 1];
         }
     }; // <-- arnoldi(k)
 

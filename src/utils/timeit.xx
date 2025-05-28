@@ -1,0 +1,18 @@
+export module utils:timeit;
+
+import std;
+
+namespace utils {
+
+export
+template <typename Duration = std::chrono::milliseconds, std::invocable F>
+[[nodiscard]]
+inline
+auto timeit(F&& f) {
+    const auto start = std::chrono::system_clock::now();
+    std::forward<F>(f)();
+    const auto end = std::chrono::system_clock::now();
+    return std::chrono::duration_cast<Duration>(end - start);
+} // <-- timeit(f)
+
+} // <-- namespace utils

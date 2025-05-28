@@ -134,6 +134,9 @@ public:
     [[nodiscard]]
     const auto& get_sensitivity() const { return this->result; }
 
+    [[nodiscard]]
+    Real get_time() const { return this->base.get_time(); }
+
 private:
     inline constexpr
     void prepare() {

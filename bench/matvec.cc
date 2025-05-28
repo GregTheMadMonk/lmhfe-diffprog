@@ -12,6 +12,9 @@ namespace rng = utils::random::generators;
 const auto a = std::views::take(rng::normal<f32>(-200.0, 200.0), 1024)
                | std::ranges::to<std::vector<f32>>();
 
+const auto a_al = std::views::take(rng::normal<f32>(-200.0, 200.0), 1024)
+                  | std::ranges::to<std::vector<f32, utils::aligned::Allocator<f32, 256>>>();
+
 const auto A_sparse = [] {
     math::CSR<f32> ret(1024, 1024);
     auto gen = rng::normal<f32>(-200.0, 200.0).begin();
@@ -42,6 +45,13 @@ inline void matvec_dense(benchmark::State& state) {
     }
 } // <-- matvec_dense(state)
 
+inline void matvec_dense_aligned(benchmark::State& state) {
+    std::vector<f32> out(a.size());
+    for (auto _ : state) {
+        math::matvec(A_dense, a_al, out);
+    }
+} // <-- matvec_dense(state)
+
 inline void matvec_sparse(benchmark::State& state) {
     std::vector<f32> out(a.size());
     for (auto _ : state) {
@@ -49,7 +59,16 @@ inline void matvec_sparse(benchmark::State& state) {
     }
 } // <-- matvec_sparse(state)
 
+inline void matvec_sparse_aligned(benchmark::State& state) {
+    std::vector<f32> out(a.size());
+    for (auto _ : state) {
+        math::matvec(A_sparse, a_al, out);
+    }
+} // <-- matvec_sparse(state)
+
 BENCHMARK(matvec_dense);
+BENCHMARK(matvec_dense_aligned);
 BENCHMARK(matvec_sparse);
+BENCHMARK(matvec_sparse_aligned);
 
 } // <-- namespace <anonymous>

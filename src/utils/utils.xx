@@ -1,8 +1,10 @@
 export module utils;
 
+export import :aalloc;
 export import :concepts;
 export import :prefetch;
 export import :random;
+export import :timeit;
 
 import std;
 

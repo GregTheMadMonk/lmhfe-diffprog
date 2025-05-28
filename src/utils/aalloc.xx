@@ -1,0 +1,67 @@
+export module utils:aalloc;
+
+import dxx.cstd.fixed;
+import std;
+
+namespace utils::aligned {
+
+export
+template <typename T, uz t_align_bytes, std::ptrdiff_t t_offset = 0>
+requires (t_align_bytes >= alignof(T))
+struct Allocator {
+public:
+    using value_type = T;
+    static inline constexpr std::align_val_t align_bytes{ t_align_bytes };
+    static inline constexpr auto offset = t_offset;
+
+private:
+    static inline constexpr std::ptrdiff_t padding = (offset < 0)
+                                                   ? t_align_bytes + offset
+                                                   : offset;
+
+public:
+    template <typename U>
+    struct rebind {
+        using other = Allocator<U, t_align_bytes, t_offset>;
+    }; // <-- struct rebind<U>
+
+    inline constexpr Allocator() = default;
+    inline constexpr Allocator(const Allocator&) = default;
+
+    template <typename U>
+    inline constexpr
+    Allocator(const Allocator<U, t_align_bytes, t_offset>&) {}
+
+    [[nodiscard]]
+    inline constexpr
+    T* allocate(uz elements) {
+        if (elements > std::numeric_limits<uz>::max() / sizeof(T)) {
+            throw std::bad_array_new_length{};
+        }
+
+        const uz bytes = [elements] {
+            if constexpr (offset == 0) {
+                return elements * sizeof(T);
+            } else {
+                return padding + elements * sizeof(T);
+            }
+        } ();
+        return reinterpret_cast<T*>(
+            padding + reinterpret_cast<u8*>(
+                ::operator new[](bytes, align_bytes)
+            )
+        );
+    } // <-- Allocator::allocate(elements)
+
+    void deallocate(T* ptr, [[maybe_unused]] uz) {
+        if constexpr (offset == 0) {
+            ::operator delete[](ptr, align_bytes);
+        } else {
+            ::operator delete[](
+                retinterpret_cast<u8*>(ptr) - padding, align_bytes
+            );
+        }
+    } // <-- Allocator::deallocate(ptr, <unused>)
+}; // <-- struct Allocator<T, t_align_bytes, t_offset>
+
+} // <-- namespace utils::aligned

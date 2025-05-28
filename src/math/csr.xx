@@ -32,6 +32,8 @@ public:
             return (*ptr = value);
         }
 
+        const auto offset = this->get_row_index(row + 1);
+
         // 1 element is added to row `row`
         // add 1 to all row offsets after row
         for (auto r : range(row + 1, this->rows)) {
@@ -45,9 +47,9 @@ public:
             return *this->data.begin();
         }
 
-        // Append the new value to the beginning of the row
-        const auto offset = this->row_offsets[row];
-
+        // Append the new value to the end of the row
+        // TODO: Search for an appropriate location to ensure that
+        //       cols in a row are always sorted!
         const auto ret = this->data.insert(
             std::next(this->data.begin(), offset),
             value

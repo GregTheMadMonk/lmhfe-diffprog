@@ -48,6 +48,9 @@ public:
         return ret;
     } // <-- FinDiff::sensitivity(func) const
 
+    [[nodiscard]]
+    Real get_time() const { return this->base.get_time(); }
+
 private:
     Real da;
     LMHFE<Real> base;

@@ -69,36 +69,9 @@ public:
             }
         }
 
-#if 0
-        std::print("mat=[");
-        for (uz i : range(0uz, this->sysmat.get_rows())) {
-            std::print("[");
-            for (uz j : range(0uz, this->sysmat.get_cols())) {
-                std::print("{},", this->sysmat.at(i, j));
-            }
-            std::print("],");
-        }
-        std::println("]");
-        std::println("rhs={}", this->rhs);
-        std::cout.flush();
-#endif
-
-#if 1
         dxx::assert::always(
             ::math::gmres::solve(this->sysmat, this->rhs, this->edge_solution, { .tol = this->tol })
         );
-#else
-        static math::gmres::Options<Real> opt{
-            .max_iters = 35,
-            .verbose = false,
-            .restart = true
-        };
-        opt.tol = this->tol;
-        while(
-            !::math::gmres::solve(this->sysmat, this->rhs, this->edge_solution, opt)
-        ) ;//std::println("{}", this->edge_solution);
-        //std::println("{}", this->edge_solution);
-#endif
 
         for (auto [ c_idx, cell, pv ] : enumerate(mesh.cells, this->solution)) {
             pv = this->prev_solution[c_idx] * this->lambda[c_idx];

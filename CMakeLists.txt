@@ -77,6 +77,10 @@ add_executable( meshgen "src/meshgen/main.cc" )
 target_compile_features( meshgen PRIVATE cxx_std_23 )
 target_link_libraries( meshgen PRIVATE mesh utils dot-xx::all )
 
+add_executable( vis "src/vis/vis.cc" )
+target_compile_features( vis PRIVATE cxx_std_23 )
+target_link_libraries( vis PRIVATE mesh mhfe utils dot-xx::all )
+
 file( GLOB_RECURSE BENCH_CC "bench/*.cc" )
 add_executable( bench ${BENCH_CC} )
 target_compile_features( bench PRIVATE cxx_std_23 )

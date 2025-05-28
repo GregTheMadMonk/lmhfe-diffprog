@@ -49,17 +49,18 @@ const UnitTest lmhfe{
 
         ::mhfe::LMHFE solver(prob, 1e-6f);
 
-        namespace stdc = std::chrono;
-        const auto start = stdc::system_clock::now();
-        for (uz _ : range(0uz, 10uz)) {
-        //while (solver.get_time() < 10.0) {
-            solver.step();
-        }
-        const auto end = stdc::system_clock::now();
+        const auto time = utils::timeit(
+            [&] {
+                for (uz _ : range(0uz, 10uz)) {
+                //while (solver.get_time() < 10.0) {
+                    solver.step();
+                }
+            }
+        );
         std::println(
             "    - simulated {} steps in {}ms",
             static_cast<uz>(solver.get_time() / prob.tau),
-            stdc::duration_cast<stdc::milliseconds>(end - start).count()
+            time.count()
         );
 
         using namespace std::literals;

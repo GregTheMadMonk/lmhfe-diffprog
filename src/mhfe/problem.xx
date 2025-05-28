@@ -38,7 +38,7 @@ struct Problem {
     [[nodiscard]]
     inline constexpr
     bool is_valid() const {
-        if (this->mesh.is_empty()) {
+        if (this->mesh.is_empty() || !this->mesh.is_valid()) {
             return false;
         }
 

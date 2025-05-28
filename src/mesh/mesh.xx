@@ -146,7 +146,24 @@ public:
 
     [[nodiscard]]
     inline constexpr
-    bool is_valid() const { return true; /* TODO */ }
+    bool is_valid() const {
+        for (const auto& cell : this->cells) {
+            const std::set<uz> pts(cell.points.cbegin(), cell.points.cend());
+            const std::set<uz> egs{
+                this->edges[cell.edges[0]].points[0],
+                this->edges[cell.edges[0]].points[1],
+                this->edges[cell.edges[1]].points[0],
+                this->edges[cell.edges[1]].points[1],
+                this->edges[cell.edges[2]].points[0],
+                this->edges[cell.edges[2]].points[1],
+            };
+
+            if (!std::ranges::equal(pts, egs)) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     template <typename Output>
     inline
@@ -323,11 +340,14 @@ std::optional<Triangular<Real>> gen_rect(uz N_x, uz N_y, Real X, Real Y) {
         return std::nullopt;
     }
 
-    return Mesh{
+    Mesh ret{
         .points = std::move(points),
         .edges  = std::move(edges),
         .cells  = std::move(cells),
     };
+
+    ret.direct();
+    return ret;
 } // <-- gen_rect(N_x, N_y, X, Y)
 
 } // <-- namespace mesh
